@@ -7,10 +7,46 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createSession = `-- name: CreateSession :one
+INSERT INTO user_sessions (
+    id, user_id, refresh_token_hash, expires_at
+) VALUES (
+    $1, $2, $3, $4
+) RETURNING id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, last_used_at
+`
+
+type CreateSessionParams struct {
+	ID               uuid.UUID `json:"id"`
+	UserID           uuid.UUID `json:"user_id"`
+	RefreshTokenHash string    `json:"refresh_token_hash"`
+	ExpiresAt        time.Time `json:"expires_at"`
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (UserSession, error) {
+	row := q.db.QueryRow(ctx, createSession,
+		arg.ID,
+		arg.UserID,
+		arg.RefreshTokenHash,
+		arg.ExpiresAt,
+	)
+	var i UserSession
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RefreshTokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+	)
+	return i, err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
@@ -45,6 +81,29 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Bio,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getActiveSessionByTokenHash = `-- name: GetActiveSessionByTokenHash :one
+SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, last_used_at FROM user_sessions
+WHERE refresh_token_hash = $1
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+LIMIT 1
+`
+
+func (q *Queries) GetActiveSessionByTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error) {
+	row := q.db.QueryRow(ctx, getActiveSessionByTokenHash, refreshTokenHash)
+	var i UserSession
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RefreshTokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.LastUsedAt,
 	)
 	return i, err
 }
@@ -87,6 +146,28 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const revokeAllUserSessions = `-- name: RevokeAllUserSessions :exec
+UPDATE user_sessions
+SET revoked_at = NOW()
+WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeAllUserSessions, userID)
+	return err
+}
+
+const revokeSession = `-- name: RevokeSession :exec
+UPDATE user_sessions
+SET revoked_at = NOW()
+WHERE id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeSession, id)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET username = $1, avatar_url = $2, bio = $3, updated_at = NOW() WHERE id = $4 RETURNING id, username, password_hash, avatar_url, bio, created_at, updated_at
 `
@@ -116,4 +197,21 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :execrows
+UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string    `json:"password_hash"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

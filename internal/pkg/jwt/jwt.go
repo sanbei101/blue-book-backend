@@ -2,23 +2,29 @@ package jwt
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json/v2"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/cristalhq/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/phuslu/log"
 
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
-var jwtSecret = []byte("blue-book-secret-key")
-
 var (
 	jwtSigner   jwt.Signer
 	jwtVerifier jwt.Verifier
+)
+
+const (
+	AccessTokenTTL  = 15 * time.Minute
+	RefreshTokenTTL = 30 * 24 * time.Hour
 )
 
 type contextKey string
@@ -30,23 +36,31 @@ type userClaims struct {
 	jwt.RegisteredClaims
 }
 
-func init() {
+func Configure(secret string) error {
+	if len(secret) < 32 {
+		return errors.New("JWT_SECRET must contain at least 32 characters")
+	}
+
 	var err error
-	jwtSigner, err = jwt.NewSignerHS(jwt.HS256, jwtSecret)
+	jwtSigner, err = jwt.NewSignerHS(jwt.HS256, []byte(secret))
 	if err != nil {
-		log.Fatal().Err(err).Msg("初始化 JWT 签名器失败")
+		return err
 	}
-	jwtVerifier, err = jwt.NewVerifierHS(jwt.HS256, jwtSecret)
+	jwtVerifier, err = jwt.NewVerifierHS(jwt.HS256, []byte(secret))
 	if err != nil {
-		log.Fatal().Err(err).Msg("初始化 JWT 验证器失败")
+		return err
 	}
+	return nil
 }
 
 func GenerateToken(userID uuid.UUID) (string, error) {
+	if jwtSigner == nil {
+		return "", errors.New("JWT is not configured")
+	}
 	c := userClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -58,8 +72,25 @@ func GenerateToken(userID uuid.UUID) (string, error) {
 	return token.String(), nil
 }
 
+func GenerateRefreshToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func HashRefreshToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if jwtVerifier == nil {
+			render.Error(w, http.StatusInternalServerError, "认证服务未配置")
+			return
+		}
 		auth := r.Header.Get("Authorization")
 		if auth == "" {
 			render.Error(w, http.StatusUnauthorized, "未登录")
@@ -80,6 +111,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		var c userClaims
 		if err := json.Unmarshal(token.Claims(), &c); err != nil {
 			render.Error(w, http.StatusUnauthorized, "凭证数据解析失败")
+			return
+		}
+		if c.UserID == uuid.Nil {
+			render.Error(w, http.StatusUnauthorized, "无效的登录凭证")
 			return
 		}
 

@@ -13,7 +13,8 @@ import (
 func (s *Seeder) seedComments(ctx context.Context, users []db.User, posts []db.Post) ([]db.Comment, error) {
 	comments := make([]db.Comment, 0, 120)
 
-	for _, post := range posts {
+	for i := range posts {
+		post := &posts[i]
 		// 每个帖子 2-4 条一级评论
 		topLevelCount := s.rng.IntN(3) + 2
 		for range topLevelCount {

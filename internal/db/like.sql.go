@@ -11,27 +11,120 @@ import (
 	"github.com/google/uuid"
 )
 
-const toggleLike = `-- name: ToggleLike :exec
+const addCommentLike = `-- name: AddCommentLike :execrows
 INSERT INTO likes (
     id, user_id, target_id, target_type
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, 2
 ) ON CONFLICT (user_id, target_id, target_type) DO NOTHING
 `
 
-type ToggleLikeParams struct {
-	ID         uuid.UUID `json:"id"`
-	UserID     uuid.UUID `json:"user_id"`
-	TargetID   uuid.UUID `json:"target_id"`
-	TargetType int16     `json:"target_type"`
+type AddCommentLikeParams struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CommentID uuid.UUID `json:"comment_id"`
 }
 
-func (q *Queries) ToggleLike(ctx context.Context, arg ToggleLikeParams) error {
-	_, err := q.db.Exec(ctx, toggleLike,
-		arg.ID,
-		arg.UserID,
-		arg.TargetID,
-		arg.TargetType,
-	)
-	return err
+func (q *Queries) AddCommentLike(ctx context.Context, arg AddCommentLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addCommentLike, arg.ID, arg.UserID, arg.CommentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const addPostLike = `-- name: AddPostLike :execrows
+INSERT INTO likes (
+    id, user_id, target_id, target_type
+) VALUES (
+    $1, $2, $3, 1
+) ON CONFLICT (user_id, target_id, target_type) DO NOTHING
+`
+
+type AddPostLikeParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+	PostID uuid.UUID `json:"post_id"`
+}
+
+func (q *Queries) AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addPostLike, arg.ID, arg.UserID, arg.PostID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const isCommentLiked = `-- name: IsCommentLiked :one
+SELECT EXISTS(
+    SELECT 1 FROM likes
+    WHERE user_id = $1 AND target_id = $2 AND target_type = 2
+) AS liked
+`
+
+type IsCommentLikedParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	CommentID uuid.UUID `json:"comment_id"`
+}
+
+func (q *Queries) IsCommentLiked(ctx context.Context, arg IsCommentLikedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isCommentLiked, arg.UserID, arg.CommentID)
+	var liked bool
+	err := row.Scan(&liked)
+	return liked, err
+}
+
+const isPostLiked = `-- name: IsPostLiked :one
+SELECT EXISTS(
+    SELECT 1 FROM likes
+    WHERE user_id = $1 AND target_id = $2 AND target_type = 1
+) AS liked
+`
+
+type IsPostLikedParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	PostID uuid.UUID `json:"post_id"`
+}
+
+func (q *Queries) IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isPostLiked, arg.UserID, arg.PostID)
+	var liked bool
+	err := row.Scan(&liked)
+	return liked, err
+}
+
+const removeCommentLike = `-- name: RemoveCommentLike :execrows
+DELETE FROM likes
+WHERE user_id = $1 AND target_id = $2 AND target_type = 2
+`
+
+type RemoveCommentLikeParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	CommentID uuid.UUID `json:"comment_id"`
+}
+
+func (q *Queries) RemoveCommentLike(ctx context.Context, arg RemoveCommentLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeCommentLike, arg.UserID, arg.CommentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removePostLike = `-- name: RemovePostLike :execrows
+DELETE FROM likes
+WHERE user_id = $1 AND target_id = $2 AND target_type = 1
+`
+
+type RemovePostLikeParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	PostID uuid.UUID `json:"post_id"`
+}
+
+func (q *Queries) RemovePostLike(ctx context.Context, arg RemovePostLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removePostLike, arg.UserID, arg.PostID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

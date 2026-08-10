@@ -50,6 +50,60 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 	return i, err
 }
 
+const decrementCommentLikeCount = `-- name: DecrementCommentLikeCount :exec
+UPDATE comments SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1
+`
+
+func (q *Queries) DecrementCommentLikeCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, decrementCommentLikeCount, id)
+	return err
+}
+
+const deleteComment = `-- name: DeleteComment :execrows
+DELETE FROM comments WHERE id = $1 AND user_id = $2
+`
+
+type DeleteCommentParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteComment, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getCommentByID = `-- name: GetCommentByID :one
+SELECT id, post_id, user_id, parent_id, content, like_count, created_at FROM comments WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetCommentByID(ctx context.Context, id uuid.UUID) (Comment, error) {
+	row := q.db.QueryRow(ctx, getCommentByID, id)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.UserID,
+		&i.ParentID,
+		&i.Content,
+		&i.LikeCount,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const incrementCommentLikeCount = `-- name: IncrementCommentLikeCount :exec
+UPDATE comments SET like_count = like_count + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementCommentLikeCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, incrementCommentLikeCount, id)
+	return err
+}
+
 const listCommentsByPostID = `-- name: ListCommentsByPostID :many
 SELECT
     c.id, c.post_id, c.user_id, c.parent_id, c.content, c.like_count, c.created_at,

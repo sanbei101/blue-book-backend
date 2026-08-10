@@ -20,7 +20,8 @@ func (s *Seeder) seedLikes(
 	seen := make(map[string]bool)
 
 	// 帖子点赞:每个帖子 3-8 个赞
-	for _, post := range posts {
+	for i := range posts {
+		post := &posts[i]
 		likeCount := s.rng.IntN(6) + 3
 		for range likeCount {
 			user := users[s.rng.IntN(len(users))]
@@ -31,14 +32,16 @@ func (s *Seeder) seedLikes(
 			seen[key] = true
 
 			likeID := uuid.Must(uuid.NewV7())
-			err := s.store.ToggleLike(ctx, db.ToggleLikeParams{
-				ID:         likeID,
-				UserID:     user.ID,
-				TargetID:   post.ID,
-				TargetType: 1, // 帖子
+			_, err := s.store.AddPostLike(ctx, db.AddPostLikeParams{
+				ID:     likeID,
+				UserID: user.ID,
+				PostID: post.ID,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("like post: %w", err)
+			}
+			if err := s.store.IncrementPostLikeCount(ctx, post.ID); err != nil {
+				return nil, fmt.Errorf("increment post like count: %w", err)
 			}
 			likes = append(likes, db.Like{
 				ID:         likeID,
@@ -50,7 +53,8 @@ func (s *Seeder) seedLikes(
 	}
 
 	// 评论点赞:每个评论 0-3 个赞
-	for _, comment := range comments {
+	for i := range comments {
+		comment := &comments[i]
 		likeCount := s.rng.IntN(4)
 		for range likeCount {
 			user := users[s.rng.IntN(len(users))]
@@ -61,14 +65,16 @@ func (s *Seeder) seedLikes(
 			seen[key] = true
 
 			likeID := uuid.Must(uuid.NewV7())
-			err := s.store.ToggleLike(ctx, db.ToggleLikeParams{
-				ID:         likeID,
-				UserID:     user.ID,
-				TargetID:   comment.ID,
-				TargetType: 2, // 评论
+			_, err := s.store.AddCommentLike(ctx, db.AddCommentLikeParams{
+				ID:        likeID,
+				UserID:    user.ID,
+				CommentID: comment.ID,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("like comment: %w", err)
+			}
+			if err := s.store.IncrementCommentLikeCount(ctx, comment.ID); err != nil {
+				return nil, fmt.Errorf("increment comment like count: %w", err)
 			}
 			likes = append(likes, db.Like{
 				ID:         likeID,
@@ -103,7 +109,7 @@ func (s *Seeder) seedFollows(ctx context.Context, users []db.User) ([]db.Follow,
 			}
 			seen[key] = true
 
-			err := s.store.ToggleFollow(ctx, db.ToggleFollowParams{
+			_, err := s.store.AddFollow(ctx, db.AddFollowParams{
 				FollowerID:  follower.ID,
 				FollowingID: following.ID,
 			})

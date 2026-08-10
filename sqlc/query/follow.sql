@@ -1,12 +1,25 @@
--- name: ToggleFollow :exec
+-- name: AddFollow :execrows
 INSERT INTO follows (
     follower_id, following_id
 ) VALUES (
     @follower_id, @following_id
 ) ON CONFLICT (follower_id, following_id) DO NOTHING;
 
--- name: Unfollow :exec
-DELETE FROM follows WHERE follower_id = @follower_id AND following_id = @following_id;
+-- name: RemoveFollow :execrows
+DELETE FROM follows
+WHERE follower_id = @follower_id AND following_id = @following_id;
+
+-- name: IsFollowing :one
+SELECT EXISTS(
+    SELECT 1 FROM follows
+    WHERE follower_id = @follower_id AND following_id = @following_id
+) AS following;
+
+-- name: GetFollowerCount :one
+SELECT COUNT(*)::bigint FROM follows WHERE following_id = @user_id;
+
+-- name: GetFollowingCount :one
+SELECT COUNT(*)::bigint FROM follows WHERE follower_id = @user_id;
 
 -- name: ListFollowers :many
 SELECT

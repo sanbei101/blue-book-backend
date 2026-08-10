@@ -18,7 +18,7 @@ INSERT INTO posts (
     id, user_id, title, content
 ) VALUES (
     $1, $2, $3, $4
-) RETURNING id, user_id, title, content, view_count, created_at, updated_at
+) RETURNING id, user_id, title, content, view_count, like_count, collect_count, comment_count, created_at, updated_at
 `
 
 type CreatePostParams struct {
@@ -42,6 +42,9 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.Title,
 		&i.Content,
 		&i.ViewCount,
+		&i.LikeCount,
+		&i.CollectCount,
+		&i.CommentCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -54,6 +57,33 @@ type CreatePostMediaParams struct {
 	MediaURL  string        `json:"media_url"`
 	MediaType MediaTypeEnum `json:"media_type"`
 	SortOrder int16         `json:"sort_order"`
+}
+
+const decrementPostCollectCount = `-- name: DecrementPostCollectCount :exec
+UPDATE posts SET collect_count = GREATEST(collect_count - 1, 0) WHERE id = $1
+`
+
+func (q *Queries) DecrementPostCollectCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, decrementPostCollectCount, id)
+	return err
+}
+
+const decrementPostCommentCount = `-- name: DecrementPostCommentCount :exec
+UPDATE posts SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = $1
+`
+
+func (q *Queries) DecrementPostCommentCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, decrementPostCommentCount, id)
+	return err
+}
+
+const decrementPostLikeCount = `-- name: DecrementPostLikeCount :exec
+UPDATE posts SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1
+`
+
+func (q *Queries) DecrementPostLikeCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, decrementPostLikeCount, id)
+	return err
 }
 
 const deletePost = `-- name: DeletePost :exec
@@ -81,7 +111,8 @@ func (q *Queries) DeletePostMediaByPostID(ctx context.Context, postID uuid.UUID)
 
 const getPostByID = `-- name: GetPostByID :one
 SELECT
-    p.id, p.user_id, p.title, p.content, p.view_count, p.created_at, p.updated_at,
+    p.id, p.user_id, p.title, p.content, p.view_count, p.like_count,
+    p.collect_count, p.comment_count, p.created_at, p.updated_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar
 FROM posts p
 JOIN users u ON p.user_id = u.id
@@ -94,6 +125,9 @@ type GetPostByIDRow struct {
 	Title          string      `json:"title"`
 	Content        string      `json:"content"`
 	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
 	CreatedAt      time.Time   `json:"created_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
 	AuthorID       uuid.UUID   `json:"author_id"`
@@ -110,6 +144,9 @@ func (q *Queries) GetPostByID(ctx context.Context, id uuid.UUID) (GetPostByIDRow
 		&i.Title,
 		&i.Content,
 		&i.ViewCount,
+		&i.LikeCount,
+		&i.CollectCount,
+		&i.CommentCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -150,6 +187,33 @@ func (q *Queries) GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([
 	return items, nil
 }
 
+const incrementPostCollectCount = `-- name: IncrementPostCollectCount :exec
+UPDATE posts SET collect_count = collect_count + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementPostCollectCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, incrementPostCollectCount, id)
+	return err
+}
+
+const incrementPostCommentCount = `-- name: IncrementPostCommentCount :exec
+UPDATE posts SET comment_count = comment_count + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementPostCommentCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, incrementPostCommentCount, id)
+	return err
+}
+
+const incrementPostLikeCount = `-- name: IncrementPostLikeCount :exec
+UPDATE posts SET like_count = like_count + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementPostLikeCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, incrementPostLikeCount, id)
+	return err
+}
+
 const incrementViewCount = `-- name: IncrementViewCount :exec
 UPDATE posts SET view_count = view_count + 1 WHERE id = $1
 `
@@ -161,7 +225,8 @@ func (q *Queries) IncrementViewCount(ctx context.Context, id uuid.UUID) error {
 
 const listPostsByUser = `-- name: ListPostsByUser :many
 SELECT
-    p.id, p.title, p.content, p.view_count, p.created_at,
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
     COALESCE(pm.media_url, '') AS cover_url
 FROM posts p
@@ -189,6 +254,9 @@ type ListPostsByUserRow struct {
 	Title          string      `json:"title"`
 	Content        string      `json:"content"`
 	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
 	CreatedAt      time.Time   `json:"created_at"`
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
@@ -210,6 +278,9 @@ func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams
 			&i.Title,
 			&i.Content,
 			&i.ViewCount,
+			&i.LikeCount,
+			&i.CollectCount,
+			&i.CommentCount,
 			&i.CreatedAt,
 			&i.AuthorID,
 			&i.AuthorUsername,
@@ -228,11 +299,13 @@ func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams
 
 const listPostsFeed = `-- name: ListPostsFeed :many
 SELECT
-    p.id, p.title, p.content, p.view_count, p.created_at,
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
     COALESCE(pm.media_url, '') AS cover_url
 FROM (
-    SELECT id, user_id, title, content, view_count, created_at
+    SELECT id, user_id, title, content, view_count, like_count, collect_count,
+           comment_count, created_at
     FROM posts
     ORDER BY id DESC
     LIMIT $2 OFFSET $1
@@ -258,6 +331,9 @@ type ListPostsFeedRow struct {
 	Title          string      `json:"title"`
 	Content        string      `json:"content"`
 	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
 	CreatedAt      time.Time   `json:"created_at"`
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
@@ -279,6 +355,9 @@ func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([
 			&i.Title,
 			&i.Content,
 			&i.ViewCount,
+			&i.LikeCount,
+			&i.CollectCount,
+			&i.CommentCount,
 			&i.CreatedAt,
 			&i.AuthorID,
 			&i.AuthorUsername,
@@ -293,4 +372,41 @@ func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePost = `-- name: UpdatePost :one
+UPDATE posts
+SET title = $1, content = $2, updated_at = NOW()
+WHERE id = $3 AND user_id = $4
+RETURNING id, user_id, title, content, view_count, like_count, collect_count, comment_count, created_at, updated_at
+`
+
+type UpdatePostParams struct {
+	Title   string    `json:"title"`
+	Content string    `json:"content"`
+	ID      uuid.UUID `json:"id"`
+	UserID  uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error) {
+	row := q.db.QueryRow(ctx, updatePost,
+		arg.Title,
+		arg.Content,
+		arg.ID,
+		arg.UserID,
+	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Content,
+		&i.ViewCount,
+		&i.LikeCount,
+		&i.CollectCount,
+		&i.CommentCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

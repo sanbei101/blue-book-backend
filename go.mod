@@ -10,6 +10,8 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/kamalyes/go-argus v0.3.0
 	github.com/phuslu/log v1.0.128
+	github.com/purus-dev/aqua v1.0.3
+	golang.org/x/crypto v0.54.0
 )
 
 require (

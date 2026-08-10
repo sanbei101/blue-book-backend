@@ -9,6 +9,7 @@ import (
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
 // OpenAPI 定义
@@ -20,13 +21,18 @@ import (
 //	@servers.description			本地开发环境
 //	@securitydefinitions.bearerauth	BearerAuth
 func RegisterRoutes(store *db.Store) *chi.Mux {
+	return RegisterRoutesWithMedia(store, nil)
+}
+
+// RegisterRoutesWithMedia 注册全部路由,presigner 为 nil 时媒体接口返回 503
+func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
 			"http://localhost:5173",
 			"http://127.0.0.1:5173",
 		},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -35,16 +41,21 @@ func RegisterRoutes(store *db.Store) *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
-	postHandler := NewPostHandler(store)
 	userHandler := NewUserHandler(store)
+	postHandler := NewPostHandler(store)
 	commentHandler := NewCommentHandler(store)
 	likeHandler := NewLikeHandler(store)
 	followHandler := NewFollowHandler(store)
+	collectionHandler := NewCollectionHandler(store)
+	mediaHandler := NewMediaHandler(presigner)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// 认证
+		r.Post("/auth/register", userHandler.Register)
+		r.Post("/auth/login", userHandler.Login)
+		r.Post("/auth/refresh", userHandler.Refresh)
+
 		// 公开路由
-		r.Post("/users/register", userHandler.Register)
-		r.Post("/users/login", userHandler.Login)
 		r.Get("/users/{user_id}", userHandler.GetProfile)
 		r.Get("/posts", postHandler.ListFeed)
 		r.Get("/posts/{post_id}", postHandler.GetByID)
@@ -56,12 +67,34 @@ func RegisterRoutes(store *db.Store) *chi.Mux {
 		// 需要认证的路由
 		r.Group(func(r chi.Router) {
 			r.Use(jwt.AuthMiddleware)
+			r.Get("/auth/me", userHandler.Me)
+			r.Post("/auth/logout", userHandler.Logout)
+			r.Put("/auth/password", userHandler.ChangePassword)
 			r.Put("/users/profile", userHandler.UpdateProfile)
+
+			r.Post("/media/presign", mediaHandler.Presign)
+
 			r.Post("/posts", postHandler.Create)
+			r.Patch("/posts/{post_id}", postHandler.Update)
 			r.Delete("/posts/{post_id}", postHandler.Delete)
+
 			r.Post("/comments", commentHandler.Create)
-			r.Post("/likes", likeHandler.Toggle)
-			r.Post("/users/{user_id}/follow", followHandler.Follow)
+			r.Delete("/comments/{comment_id}", commentHandler.Delete)
+
+			r.Put("/posts/{post_id}/like", likeHandler.LikePost)
+			r.Delete("/posts/{post_id}/like", likeHandler.UnlikePost)
+			r.Put("/comments/{comment_id}/like", likeHandler.LikeComment)
+			r.Delete("/comments/{comment_id}/like", likeHandler.UnlikeComment)
+
+			r.Put("/posts/{post_id}/collection", collectionHandler.Collect)
+			r.Delete("/posts/{post_id}/collection", collectionHandler.Uncollect)
+			r.Get("/me/collections", collectionHandler.List)
+			r.Get("/me/collections/folders", collectionHandler.ListFolders)
+			r.Post("/me/collections/folders", collectionHandler.CreateFolder)
+			r.Patch("/me/collections/folders/{folder_id}", collectionHandler.UpdateFolder)
+			r.Delete("/me/collections/folders/{folder_id}", collectionHandler.DeleteFolder)
+
+			r.Put("/users/{user_id}/follow", followHandler.Follow)
 			r.Delete("/users/{user_id}/follow", followHandler.Unfollow)
 		})
 	})

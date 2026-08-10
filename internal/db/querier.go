@@ -11,26 +11,59 @@ import (
 )
 
 type Querier interface {
+	AddCollection(ctx context.Context, arg AddCollectionParams) (int64, error)
+	AddCommentLike(ctx context.Context, arg AddCommentLikeParams) (int64, error)
+	AddFollow(ctx context.Context, arg AddFollowParams) (int64, error)
+	AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64, error)
+	CreateCollectionFolder(ctx context.Context, arg CreateCollectionFolderParams) (CollectionFolder, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreatePostMedia(ctx context.Context, arg []CreatePostMediaParams) (int64, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (UserSession, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DecrementCommentLikeCount(ctx context.Context, id uuid.UUID) error
+	DecrementPostCollectCount(ctx context.Context, id uuid.UUID) error
+	DecrementPostCommentCount(ctx context.Context, id uuid.UUID) error
+	DecrementPostLikeCount(ctx context.Context, id uuid.UUID) error
+	DeleteCollectionFolder(ctx context.Context, arg DeleteCollectionFolderParams) (int64, error)
+	DeleteComment(ctx context.Context, arg DeleteCommentParams) (int64, error)
 	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeletePostMediaByPostID(ctx context.Context, postID uuid.UUID) error
+	GetActiveSessionByTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error)
+	GetCollectionFolderByID(ctx context.Context, arg GetCollectionFolderByIDParams) (CollectionFolder, error)
+	GetCommentByID(ctx context.Context, id uuid.UUID) (Comment, error)
+	GetFollowerCount(ctx context.Context, userID uuid.UUID) (int64, error)
+	GetFollowingCount(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetPostByID(ctx context.Context, id uuid.UUID) (GetPostByIDRow, error)
 	GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([]PostMedium, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	IncrementCommentLikeCount(ctx context.Context, id uuid.UUID) error
+	IncrementPostCollectCount(ctx context.Context, id uuid.UUID) error
+	IncrementPostCommentCount(ctx context.Context, id uuid.UUID) error
+	IncrementPostLikeCount(ctx context.Context, id uuid.UUID) error
 	IncrementViewCount(ctx context.Context, id uuid.UUID) error
+	IsCollected(ctx context.Context, arg IsCollectedParams) (bool, error)
+	IsCommentLiked(ctx context.Context, arg IsCommentLikedParams) (bool, error)
+	IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error)
+	IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool, error)
+	ListCollectionFolders(ctx context.Context, userID uuid.UUID) ([]CollectionFolder, error)
+	ListCollections(ctx context.Context, arg ListCollectionsParams) ([]ListCollectionsRow, error)
 	ListCommentsByPostID(ctx context.Context, arg ListCommentsByPostIDParams) ([]ListCommentsByPostIDRow, error)
 	ListFollowers(ctx context.Context, arg ListFollowersParams) ([]ListFollowersRow, error)
 	ListFollowing(ctx context.Context, arg ListFollowingParams) ([]ListFollowingRow, error)
 	ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error)
 	ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([]ListPostsFeedRow, error)
-	ToggleFollow(ctx context.Context, arg ToggleFollowParams) error
-	ToggleLike(ctx context.Context, arg ToggleLikeParams) error
-	Unfollow(ctx context.Context, arg UnfollowParams) error
+	RemoveCollection(ctx context.Context, arg RemoveCollectionParams) (int64, error)
+	RemoveCommentLike(ctx context.Context, arg RemoveCommentLikeParams) (int64, error)
+	RemoveFollow(ctx context.Context, arg RemoveFollowParams) (int64, error)
+	RemovePostLike(ctx context.Context, arg RemovePostLikeParams) (int64, error)
+	RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error
+	RevokeSession(ctx context.Context, id uuid.UUID) error
+	UpdateCollectionFolder(ctx context.Context, arg UpdateCollectionFolderParams) (CollectionFolder, error)
+	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

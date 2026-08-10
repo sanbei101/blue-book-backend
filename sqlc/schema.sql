@@ -9,12 +9,28 @@ CREATE TABLE users (
 );
 CREATE INDEX idx_users_username ON users(username);
 
+CREATE TABLE user_sessions (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token_hash VARCHAR(64) UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id, created_at DESC);
+CREATE INDEX idx_user_sessions_active ON user_sessions(refresh_token_hash, expires_at)
+    WHERE revoked_at IS NULL;
+
 CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(100) NOT NULL,
     content TEXT NOT NULL,
     view_count BIGINT NOT NULL DEFAULT 0,
+    like_count BIGINT NOT NULL DEFAULT 0,
+    collect_count BIGINT NOT NULL DEFAULT 0,
+    comment_count BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -50,9 +66,30 @@ CREATE TABLE likes (
     target_id UUID NOT NULL, -- 可以是 post_id 也可以是 comment_id
     target_type SMALLINT NOT NULL, -- 1: 帖子, 2: 评论
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (target_type IN (1, 2)),
     UNIQUE(user_id, target_id, target_type) -- 防止重复点赞
 );
 CREATE INDEX idx_likes_target ON likes(target_id, target_type);
+
+CREATE TABLE collection_folders (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, name)
+);
+CREATE INDEX idx_collection_folders_user_id ON collection_folders(user_id, created_at DESC);
+
+CREATE TABLE collections (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    folder_id UUID REFERENCES collection_folders(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, post_id)
+);
+CREATE INDEX idx_collections_user_id ON collections(user_id, created_at DESC);
+CREATE INDEX idx_collections_post_id ON collections(post_id);
 
 CREATE TABLE follows (
     follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -1,10 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/phuslu/log"
 
 	"github.com/sanbei101/blue-book/internal/db"
@@ -20,11 +21,11 @@ func NewFollowHandler(store *db.Store) *FollowHandler {
 	return &FollowHandler{store: store}
 }
 
-// ---- 关注 ----
-
-type followResponse struct {
-	// 操作是否成功
-	OK bool `json:"ok"`
+type followStatusResponse struct {
+	// 是否已关注
+	Following bool `json:"following"`
+	// 该用户粉丝数
+	FollowerCount int64 `json:"follower_count"`
 }
 
 // 关注用户
@@ -33,38 +34,62 @@ type followResponse struct {
 //	@Tags		follows
 //	@Security	BearerAuth
 //	@Param		user_id	path		string	true	"目标用户 ID"
-//	@Success	200		{object}	render.Response[followResponse]
+//	@Success	200		{object}	render.Response[followStatusResponse]
 //	@Failure	400		{object}	render.errorResponse
+//	@Failure	404		{object}	render.errorResponse
 //	@Failure	500		{object}	render.errorResponse
-//	@Router		/users/{user_id}/follow [post]
+//	@Router		/users/{user_id}/follow [put]
 func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
-	followingIDStr := chi.URLParam(r, "user_id")
-	followingID, err := uuid.Parse(followingIDStr)
-	if err != nil {
+	targetID, ok := parseUUIDParam(r, "user_id")
+	if !ok {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
 		return
 	}
 	currentUserID := jwt.GetUserIDFromContext(r)
 
-	if currentUserID == followingID {
+	if currentUserID == targetID {
 		render.Error(w, http.StatusBadRequest, "不能关注自己")
 		return
 	}
 
-	err = h.store.ToggleFollow(r.Context(), db.ToggleFollowParams{
-		FollowerID:  currentUserID,
-		FollowingID: followingID,
+	var resp followStatusResponse
+	err := h.store.ExecTx(r.Context(), func(q *db.Queries) error {
+		if _, err := q.GetUserByID(r.Context(), targetID); err != nil {
+			return err
+		}
+		rows, err := q.AddFollow(r.Context(), db.AddFollowParams{
+			FollowerID:  currentUserID,
+			FollowingID: targetID,
+		})
+		if err != nil {
+			return err
+		}
+		following, err := q.IsFollowing(r.Context(), db.IsFollowingParams{
+			FollowerID:  currentUserID,
+			FollowingID: targetID,
+		})
+		if err != nil {
+			return err
+		}
+		followerCount, err := q.GetFollowerCount(r.Context(), targetID)
+		if err != nil {
+			return err
+		}
+		resp = followStatusResponse{Following: following, FollowerCount: followerCount}
+		_ = rows
+		return nil
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "用户不存在")
+			return
+		}
 		log.Error().Err(err).Msg("关注失败")
 		render.Error(w, http.StatusInternalServerError, "关注失败")
 		return
 	}
-
-	render.Success(w, "关注成功", followResponse{OK: true})
+	render.Success(w, "关注成功", resp)
 }
-
-// ---- 取消关注 ----
 
 // 取消关注
 //
@@ -72,30 +97,54 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 //	@Tags		follows
 //	@Security	BearerAuth
 //	@Param		user_id	path		string	true	"目标用户 ID"
-//	@Success	200		{object}	render.Response[followResponse]
+//	@Success	200		{object}	render.Response[followStatusResponse]
 //	@Failure	400		{object}	render.errorResponse
+//	@Failure	404		{object}	render.errorResponse
 //	@Failure	500		{object}	render.errorResponse
 //	@Router		/users/{user_id}/follow [delete]
 func (h *FollowHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
-	followingIDStr := chi.URLParam(r, "user_id")
-	followingID, err := uuid.Parse(followingIDStr)
-	if err != nil {
+	targetID, ok := parseUUIDParam(r, "user_id")
+	if !ok {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
 		return
 	}
 	currentUserID := jwt.GetUserIDFromContext(r)
 
-	err = h.store.Unfollow(r.Context(), db.UnfollowParams{
-		FollowerID:  currentUserID,
-		FollowingID: followingID,
+	var resp followStatusResponse
+	err := h.store.ExecTx(r.Context(), func(q *db.Queries) error {
+		if _, err := q.GetUserByID(r.Context(), targetID); err != nil {
+			return err
+		}
+		if _, err := q.RemoveFollow(r.Context(), db.RemoveFollowParams{
+			FollowerID:  currentUserID,
+			FollowingID: targetID,
+		}); err != nil {
+			return err
+		}
+		following, err := q.IsFollowing(r.Context(), db.IsFollowingParams{
+			FollowerID:  currentUserID,
+			FollowingID: targetID,
+		})
+		if err != nil {
+			return err
+		}
+		followerCount, err := q.GetFollowerCount(r.Context(), targetID)
+		if err != nil {
+			return err
+		}
+		resp = followStatusResponse{Following: following, FollowerCount: followerCount}
+		return nil
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "用户不存在")
+			return
+		}
 		log.Error().Err(err).Msg("取消关注失败")
 		render.Error(w, http.StatusInternalServerError, "取消关注失败")
 		return
 	}
-
-	render.Success(w, "取消关注成功", followResponse{OK: true})
+	render.Success(w, "取消关注成功", resp)
 }
 
 // ---- 粉丝列表 ----
@@ -137,9 +186,8 @@ func toFollowUserResponse(u *db.ListFollowersRow) followUserResponse {
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/users/{user_id}/followers [get]
 func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
-	userIDStr := chi.URLParam(r, "user_id")
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
+	userID, ok := parseUUIDParam(r, "user_id")
+	if !ok {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
 		return
 	}
@@ -158,14 +206,12 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	users := make([]followUserResponse, 0, len(rows))
-	for _, row := range rows {
-		users = append(users, toFollowUserResponse(&row))
+	for i := range rows {
+		users = append(users, toFollowUserResponse(&rows[i]))
 	}
 
 	render.Success(w, "查询成功", users)
 }
-
-// ---- 关注列表 ----
 
 // 获取关注列表
 //
@@ -179,9 +225,8 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/users/{user_id}/following [get]
 func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
-	userIDStr := chi.URLParam(r, "user_id")
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
+	userID, ok := parseUUIDParam(r, "user_id")
+	if !ok {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
 		return
 	}
@@ -200,19 +245,14 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	users := make([]followUserResponse, 0, len(rows))
-	for _, row := range rows {
-		resp := followUserResponse{
-			ID:       row.ID,
-			Username: row.Username,
-		}
-		if row.AvatarURL.Valid {
-			resp.AvatarURL = row.AvatarURL.String
-		}
-		if row.Bio.Valid {
-			resp.Bio = row.Bio.String
-		}
-		users = append(users, resp)
+	for i := range rows {
+		u := rows[i]
+		users = append(users, followUserResponse{
+			ID:       u.ID,
+			Username: u.Username,
+		})
 	}
+	// TODO: 返回互关状态
 
 	render.Success(w, "查询成功", users)
 }

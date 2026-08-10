@@ -12,6 +12,68 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addFollow = `-- name: AddFollow :execrows
+INSERT INTO follows (
+    follower_id, following_id
+) VALUES (
+    $1, $2
+) ON CONFLICT (follower_id, following_id) DO NOTHING
+`
+
+type AddFollowParams struct {
+	FollowerID  uuid.UUID `json:"follower_id"`
+	FollowingID uuid.UUID `json:"following_id"`
+}
+
+func (q *Queries) AddFollow(ctx context.Context, arg AddFollowParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addFollow, arg.FollowerID, arg.FollowingID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getFollowerCount = `-- name: GetFollowerCount :one
+SELECT COUNT(*)::bigint FROM follows WHERE following_id = $1
+`
+
+func (q *Queries) GetFollowerCount(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getFollowerCount, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getFollowingCount = `-- name: GetFollowingCount :one
+SELECT COUNT(*)::bigint FROM follows WHERE follower_id = $1
+`
+
+func (q *Queries) GetFollowingCount(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getFollowingCount, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const isFollowing = `-- name: IsFollowing :one
+SELECT EXISTS(
+    SELECT 1 FROM follows
+    WHERE follower_id = $1 AND following_id = $2
+) AS following
+`
+
+type IsFollowingParams struct {
+	FollowerID  uuid.UUID `json:"follower_id"`
+	FollowingID uuid.UUID `json:"following_id"`
+}
+
+func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isFollowing, arg.FollowerID, arg.FollowingID)
+	var following bool
+	err := row.Scan(&following)
+	return following, err
+}
+
 const listFollowers = `-- name: ListFollowers :many
 SELECT
     u.id, u.username, u.avatar_url, u.bio
@@ -108,34 +170,20 @@ func (q *Queries) ListFollowing(ctx context.Context, arg ListFollowingParams) ([
 	return items, nil
 }
 
-const toggleFollow = `-- name: ToggleFollow :exec
-INSERT INTO follows (
-    follower_id, following_id
-) VALUES (
-    $1, $2
-) ON CONFLICT (follower_id, following_id) DO NOTHING
+const removeFollow = `-- name: RemoveFollow :execrows
+DELETE FROM follows
+WHERE follower_id = $1 AND following_id = $2
 `
 
-type ToggleFollowParams struct {
+type RemoveFollowParams struct {
 	FollowerID  uuid.UUID `json:"follower_id"`
 	FollowingID uuid.UUID `json:"following_id"`
 }
 
-func (q *Queries) ToggleFollow(ctx context.Context, arg ToggleFollowParams) error {
-	_, err := q.db.Exec(ctx, toggleFollow, arg.FollowerID, arg.FollowingID)
-	return err
-}
-
-const unfollow = `-- name: Unfollow :exec
-DELETE FROM follows WHERE follower_id = $1 AND following_id = $2
-`
-
-type UnfollowParams struct {
-	FollowerID  uuid.UUID `json:"follower_id"`
-	FollowingID uuid.UUID `json:"following_id"`
-}
-
-func (q *Queries) Unfollow(ctx context.Context, arg UnfollowParams) error {
-	_, err := q.db.Exec(ctx, unfollow, arg.FollowerID, arg.FollowingID)
-	return err
+func (q *Queries) RemoveFollow(ctx context.Context, arg RemoveFollowParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeFollow, arg.FollowerID, arg.FollowingID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -55,6 +55,21 @@ func (ns NullMediaTypeEnum) Value() (driver.Value, error) {
 	return string(ns.MediaTypeEnum), nil
 }
 
+type Collection struct {
+	UserID    uuid.UUID  `json:"user_id"`
+	PostID    uuid.UUID  `json:"post_id"`
+	FolderID  *uuid.UUID `json:"folder_id"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+type CollectionFolder struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Comment struct {
 	ID        uuid.UUID  `json:"id"`
 	PostID    uuid.UUID  `json:"post_id"`
@@ -80,13 +95,16 @@ type Like struct {
 }
 
 type Post struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	ViewCount int64     `json:"view_count"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"user_id"`
+	Title        string    `json:"title"`
+	Content      string    `json:"content"`
+	ViewCount    int64     `json:"view_count"`
+	LikeCount    int64     `json:"like_count"`
+	CollectCount int64     `json:"collect_count"`
+	CommentCount int64     `json:"comment_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type PostMedium struct {
@@ -106,4 +124,14 @@ type User struct {
 	Bio          pgtype.Text `json:"bio"`
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
+type UserSession struct {
+	ID               uuid.UUID          `json:"id"`
+	UserID           uuid.UUID          `json:"user_id"`
+	RefreshTokenHash string             `json:"refresh_token_hash"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+	LastUsedAt       time.Time          `json:"last_used_at"`
 }
