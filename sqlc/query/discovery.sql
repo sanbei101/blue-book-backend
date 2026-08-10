@@ -30,7 +30,7 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url,
+    COALESCE(pm.media_key, '') AS cover_key,
     ts_rank(
         to_tsvector('simple', p.title || ' ' || p.content),
         plainto_tsquery('simple', @search_query)
@@ -38,7 +38,7 @@ SELECT
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -68,12 +68,12 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM post_tags pt
 JOIN posts p ON p.id = pt.post_id
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -106,12 +106,12 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM topic_posts tp
 JOIN posts p ON p.id = tp.post_id
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -156,11 +156,11 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC

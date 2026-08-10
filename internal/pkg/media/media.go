@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg" // Register JPEG image decoding.
 	_ "image/png"  // Register PNG image decoding.
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -25,6 +26,15 @@ const (
 	initialImageHeaderSize = 64 * 1024
 	maxImageHeaderSize     = 1024 * 1024
 )
+
+// CDNURL returns the public URL for an object key. CDN_BASE_URL is optional for local development.
+func CDNURL(objectKey string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("CDN_BASE_URL")), "/")
+	if baseURL == "" || objectKey == "" {
+		return objectKey
+	}
+	return baseURL + "/" + strings.TrimLeft(objectKey, "/")
+}
 
 // Presigner 负责为 S3 兼容存储生成预签名上传地址
 type Presigner struct {

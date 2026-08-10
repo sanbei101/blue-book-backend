@@ -110,7 +110,7 @@ type Post struct {
 type PostMedium struct {
 	ID        uuid.UUID     `json:"id"`
 	PostID    uuid.UUID     `json:"post_id"`
-	MediaURL  string        `json:"media_url"`
+	MediaKey  string        `json:"media_key"`
 	MediaType MediaTypeEnum `json:"media_type"`
 	Width     int32         `json:"width"`
 	Height    int32         `json:"height"`

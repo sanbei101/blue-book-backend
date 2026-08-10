@@ -58,7 +58,7 @@ type createPostRequest struct {
 }
 type createMediaItem struct {
 	// 媒体对象 key
-	MediaURL string `json:"media_url" validate:"required"`
+	MediaKey string `json:"media_key" validate:"required"`
 	// 媒体类型 (image/video)
 	MediaType string `json:"media_type" validate:"required,oneof=image video"`
 	// 排序序号
@@ -134,7 +134,7 @@ type authorResponse struct {
 type mediaResponse struct {
 	// 媒体 ID
 	ID uuid.UUID `json:"id"`
-	// 媒体 URL
+	// 媒体 CDN URL
 	MediaURL string `json:"media_url"`
 	// 媒体类型
 	MediaType string `json:"media_type"`
@@ -157,7 +157,7 @@ func toAuthorFromFeed(authorID uuid.UUID, authorUsername string, authorAvatar pg
 func toMediaResponse(m *db.PostMedium) mediaResponse {
 	return mediaResponse{
 		ID:        m.ID,
-		MediaURL:  m.MediaURL,
+		MediaURL:  media.CDNURL(m.MediaKey),
 		MediaType: string(m.MediaType),
 		Width:     m.Width,
 		Height:    m.Height,
@@ -183,7 +183,7 @@ func (h *PostHandler) toCreatePostMediaParams(
 				return nil, media.ErrNotConfigured
 			}
 			var err error
-			width, height, err = h.presigner.ImageDimensions(ctx, item.MediaURL)
+			width, height, err = h.presigner.ImageDimensions(ctx, item.MediaKey)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +192,7 @@ func (h *PostHandler) toCreatePostMediaParams(
 		params[i] = db.CreatePostMediaParams{
 			ID:        uuid.Must(uuid.NewV7()),
 			PostID:    postID,
-			MediaURL:  item.MediaURL,
+			MediaKey:  item.MediaKey,
 			MediaType: mediaType,
 			Width:     width,
 			Height:    height,
@@ -343,7 +343,7 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			CreatedAt:    rows[i].CreatedAt,
-			CoverURL:     rows[i].CoverURL,
+			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		})
 	}
@@ -480,7 +480,7 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			CreatedAt:    rows[i].CreatedAt,
-			CoverURL:     rows[i].CoverURL,
+			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		})
 	}

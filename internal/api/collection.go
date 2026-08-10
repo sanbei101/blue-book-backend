@@ -11,6 +11,7 @@ import (
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
@@ -230,7 +231,7 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			CollectedAt:  rows[i].CollectedAt,
-			CoverURL:     rows[i].CoverURL,
+			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		})
 	}

@@ -31,7 +31,7 @@ func (r iteratorForCreatePostMedia) Values() ([]interface{}, error) {
 	return []interface{}{
 		r.rows[0].ID,
 		r.rows[0].PostID,
-		r.rows[0].MediaURL,
+		r.rows[0].MediaKey,
 		r.rows[0].MediaType,
 		r.rows[0].Width,
 		r.rows[0].Height,
@@ -44,5 +44,5 @@ func (r iteratorForCreatePostMedia) Err() error {
 }
 
 func (q *Queries) CreatePostMedia(ctx context.Context, arg []CreatePostMediaParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"post_media"}, []string{"id", "post_id", "media_url", "media_type", "width", "height", "sort_order"}, &iteratorForCreatePostMedia{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"post_media"}, []string{"id", "post_id", "media_key", "media_type", "width", "height", "sort_order"}, &iteratorForCreatePostMedia{rows: arg})
 }

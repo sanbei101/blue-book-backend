@@ -173,11 +173,11 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -206,7 +206,7 @@ type ListRecommendedPostsRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 }
 
 func (q *Queries) ListRecommendedPosts(ctx context.Context, arg ListRecommendedPostsParams) ([]ListRecommendedPostsRow, error) {
@@ -230,7 +230,7 @@ func (q *Queries) ListRecommendedPosts(ctx context.Context, arg ListRecommendedP
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 		); err != nil {
 			return nil, err
 		}
@@ -285,12 +285,12 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM post_tags pt
 JOIN posts p ON p.id = pt.post_id
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -319,7 +319,7 @@ type ListTagPostsRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 }
 
 func (q *Queries) ListTagPosts(ctx context.Context, arg ListTagPostsParams) ([]ListTagPostsRow, error) {
@@ -343,7 +343,7 @@ func (q *Queries) ListTagPosts(ctx context.Context, arg ListTagPostsParams) ([]L
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 		); err != nil {
 			return nil, err
 		}
@@ -393,12 +393,12 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM topic_posts tp
 JOIN posts p ON p.id = tp.post_id
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -427,7 +427,7 @@ type ListTopicPostsRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 }
 
 func (q *Queries) ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) ([]ListTopicPostsRow, error) {
@@ -451,7 +451,7 @@ func (q *Queries) ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) 
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 		); err != nil {
 			return nil, err
 		}
@@ -552,7 +552,7 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url,
+    COALESCE(pm.media_key, '') AS cover_key,
     ts_rank(
         to_tsvector('simple', p.title || ' ' || p.content),
         plainto_tsquery('simple', $1)
@@ -560,7 +560,7 @@ SELECT
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -590,7 +590,7 @@ type SearchPostsRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 	Relevance      float32     `json:"relevance"`
 }
 
@@ -615,7 +615,7 @@ func (q *Queries) SearchPosts(ctx context.Context, arg SearchPostsParams) ([]Sea
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 			&i.Relevance,
 		); err != nil {
 			return nil, err

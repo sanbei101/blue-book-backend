@@ -54,7 +54,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 type CreatePostMediaParams struct {
 	ID        uuid.UUID     `json:"id"`
 	PostID    uuid.UUID     `json:"post_id"`
-	MediaURL  string        `json:"media_url"`
+	MediaKey  string        `json:"media_key"`
 	MediaType MediaTypeEnum `json:"media_type"`
 	Width     int32         `json:"width"`
 	Height    int32         `json:"height"`
@@ -159,7 +159,7 @@ func (q *Queries) GetPostByID(ctx context.Context, id uuid.UUID) (GetPostByIDRow
 }
 
 const getPostMediaByPostID = `-- name: GetPostMediaByPostID :many
-SELECT id, post_id, media_url, media_type, width, height, sort_order, created_at
+SELECT id, post_id, media_key, media_type, width, height, sort_order, created_at
 FROM post_media
 WHERE post_id = $1
 ORDER BY sort_order
@@ -177,7 +177,7 @@ func (q *Queries) GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.PostID,
-			&i.MediaURL,
+			&i.MediaKey,
 			&i.MediaType,
 			&i.Width,
 			&i.Height,
@@ -235,11 +235,11 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -268,7 +268,7 @@ type ListPostsByUserRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 }
 
 func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error) {
@@ -292,7 +292,7 @@ func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 		); err != nil {
 			return nil, err
 		}
@@ -309,7 +309,7 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
@@ -319,7 +319,7 @@ FROM (
 ) p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -345,7 +345,7 @@ type ListPostsFeedRow struct {
 	AuthorID       uuid.UUID   `json:"author_id"`
 	AuthorUsername string      `json:"author_username"`
 	AuthorAvatar   pgtype.Text `json:"author_avatar"`
-	CoverURL       string      `json:"cover_url"`
+	CoverKey       string      `json:"cover_key"`
 }
 
 func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([]ListPostsFeedRow, error) {
@@ -369,7 +369,7 @@ func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([
 			&i.AuthorID,
 			&i.AuthorUsername,
 			&i.AuthorAvatar,
-			&i.CoverURL,
+			&i.CoverKey,
 		); err != nil {
 			return nil, err
 		}

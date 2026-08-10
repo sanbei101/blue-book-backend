@@ -14,6 +14,7 @@ import (
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
@@ -77,7 +78,7 @@ func toSearchPostResponse(row *db.SearchPostsRow) searchPostResponse {
 		CollectCount: row.CollectCount,
 		CommentCount: row.CommentCount,
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
-		CoverURL:     row.CoverURL,
+		CoverURL:     media.CDNURL(row.CoverKey),
 		CreatedAt:    row.CreatedAt,
 		Relevance:    row.Relevance,
 	}
@@ -93,7 +94,7 @@ func toSearchPostFromTag(row *db.ListTagPostsRow) listPostsItemResponse {
 		CollectCount: row.CollectCount,
 		CommentCount: row.CommentCount,
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
-		CoverURL:     row.CoverURL,
+		CoverURL:     media.CDNURL(row.CoverKey),
 		CreatedAt:    row.CreatedAt,
 	}
 }
@@ -505,7 +506,7 @@ func (h *DiscoveryHandler) ListTopicPosts(w http.ResponseWriter, r *http.Request
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
-			CoverURL:     rows[i].CoverURL,
+			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			CreatedAt:    rows[i].CreatedAt,
 		})
 	}
@@ -663,7 +664,7 @@ func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
-			CoverURL:     rows[i].CoverURL,
+			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			CreatedAt:    rows[i].CreatedAt,
 		})
 	}

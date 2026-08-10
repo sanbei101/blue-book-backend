@@ -42,13 +42,13 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url,
+    COALESCE(pm.media_key, '') AS cover_key,
     c.created_at AS collected_at
 FROM collections c
 JOIN posts p ON p.id = c.post_id
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url FROM post_media
+    SELECT media_key FROM post_media
     WHERE post_id = p.id ORDER BY sort_order ASC LIMIT 1
 ) pm ON true
 WHERE c.user_id = @user_id

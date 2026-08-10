@@ -58,7 +58,7 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 			mediaParams = append(mediaParams, db.CreatePostMediaParams{
 				ID:        uuid.Must(uuid.NewV7()),
 				PostID:    post.ID,
-				MediaURL:  asset.ObjectKey,
+				MediaKey:  asset.ObjectKey,
 				MediaType: db.MediaTypeEnumImage,
 				Width:     asset.Width,
 				Height:    asset.Height,
@@ -75,7 +75,7 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 				allMedia = append(allMedia, db.PostMedium{
 					ID:        param.ID,
 					PostID:    param.PostID,
-					MediaURL:  param.MediaURL,
+					MediaKey:  param.MediaKey,
 					MediaType: param.MediaType,
 					Width:     param.Width,
 					Height:    param.Height,

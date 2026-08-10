@@ -7,9 +7,9 @@ INSERT INTO posts (
 
 -- name: CreatePostMedia :copyfrom
 INSERT INTO post_media (
-    id, post_id, media_url, media_type, width, height, sort_order
+    id, post_id, media_key, media_type, width, height, sort_order
 ) VALUES (
-    @id, @post_id, @media_url, @media_type, @width, @height, @sort_order
+    @id, @post_id, @media_key, @media_type, @width, @height, @sort_order
 );
 
 -- name: ListPostsFeed :many
@@ -17,7 +17,7 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
@@ -27,7 +27,7 @@ FROM (
 ) p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -49,11 +49,11 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_url, '') AS cover_url
+    COALESCE(pm.media_key, '') AS cover_key
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_url
+    SELECT media_key
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -64,7 +64,7 @@ ORDER BY p.created_at DESC
 LIMIT @limit_count OFFSET @offset_count;
 
 -- name: GetPostMediaByPostID :many
-SELECT id, post_id, media_url, media_type, width, height, sort_order, created_at
+SELECT id, post_id, media_key, media_type, width, height, sort_order, created_at
 FROM post_media
 WHERE post_id = @post_id
 ORDER BY sort_order;
