@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
 const cardEngineURL = "https://blue-card-render.sanbei.codes/proto.cardengine.v1.CardEngineService/CardsList"
@@ -51,18 +53,24 @@ type cardEngineResponse struct {
 	} `json:"templates"`
 }
 
+type cardAsset struct {
+	URL    string
+	Width  int32
+	Height int32
+}
+
 // cardCache 卡片 URL 缓存
 type cardCache struct {
 	mu    sync.RWMutex
-	cache map[string][]string
+	cache map[string][]cardAsset
 }
 
 var cards = &cardCache{
-	cache: make(map[string][]string),
+	cache: make(map[string][]cardAsset),
 }
 
 // fetchCardURLs 调用卡片引擎 API 获取卡片图片 URL
-func (c *cardCache) fetchCardURLs(ctx context.Context, rng *rand.Rand, title string) ([]string, error) {
+func (c *cardCache) fetchCardURLs(ctx context.Context, rng *rand.Rand, title string) ([]cardAsset, error) {
 	// 检查缓存
 	c.mu.RLock()
 	if urls, ok := c.cache[title]; ok {
@@ -108,17 +116,28 @@ func (c *cardCache) fetchCardURLs(ctx context.Context, rng *rand.Rand, title str
 		return nil, errors.New("no templates returned")
 	}
 
-	urls := make([]string, 0, len(result.Templates))
+	assets := make([]cardAsset, 0, len(result.Templates))
 	for _, t := range result.Templates {
 		if t.URL != "" {
-			urls = append(urls, t.URL)
+			width, height, err := media.ImageDimensions(ctx, t.URL)
+			if err != nil {
+				return nil, fmt.Errorf("decode card image dimensions: %w", err)
+			}
+			assets = append(assets, cardAsset{
+				URL:    t.URL,
+				Width:  width,
+				Height: height,
+			})
 		}
+	}
+	if len(assets) == 0 {
+		return nil, errors.New("no card images returned")
 	}
 
 	// 缓存结果
 	c.mu.Lock()
-	c.cache[title] = urls
+	c.cache[title] = assets
 	c.mu.Unlock()
 
-	return urls, nil
+	return assets, nil
 }

@@ -7,9 +7,9 @@ INSERT INTO posts (
 
 -- name: CreatePostMedia :copyfrom
 INSERT INTO post_media (
-    id, post_id, media_url, media_type, sort_order
+    id, post_id, media_url, media_type, width, height, sort_order
 ) VALUES (
-    @id, @post_id, @media_url, @media_type, @sort_order
+    @id, @post_id, @media_url, @media_type, @width, @height, @sort_order
 );
 
 -- name: ListPostsFeed :many
@@ -64,7 +64,10 @@ ORDER BY p.created_at DESC
 LIMIT @limit_count OFFSET @offset_count;
 
 -- name: GetPostMediaByPostID :many
-SELECT * FROM post_media WHERE post_id = @post_id ORDER BY sort_order;
+SELECT id, post_id, media_url, media_type, width, height, sort_order, created_at
+FROM post_media
+WHERE post_id = @post_id
+ORDER BY sort_order;
 
 -- name: DeletePost :exec
 DELETE FROM posts WHERE id = @id AND user_id = @user_id;

@@ -18,17 +18,17 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 	// 预先获取所有帖子的卡片 URL
 	total := len(postSeeds)
 	log.Printf("Fetching card URLs from card engine... (0/%d)", total)
-	cardURLs := make([][]string, 0, total)
+	cardAssets := make([][]cardAsset, 0, total)
 	for i, p := range postSeeds {
 		log.Printf("[%d/%d] Fetching cards for %q...", i+1, total, p.Title)
-		urls, err := cards.fetchCardURLs(ctx, s.rng, p.Title)
+		assets, err := cards.fetchCardURLs(ctx, s.rng, p.Title)
 		if err != nil {
 			log.Printf("[%d/%d] Warning: failed to fetch cards: %v, using fallback", i+1, total, err)
 			// 使用 picsum 作为 fallback
-			cardURLs = append(cardURLs, nil)
+			cardAssets = append(cardAssets, nil)
 			continue
 		}
-		cardURLs = append(cardURLs, urls)
+		cardAssets = append(cardAssets, assets)
 		log.Printf("[%d/%d] Done ✓", i+1, total)
 	}
 	log.Printf("Card URLs fetched successfully (%d/%d)", total, total)
@@ -47,26 +47,28 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 		}
 
 		// 添加媒体图片
-		urls := cardURLs[i]
+		assets := cardAssets[i]
 		mediaCount := 1
-		if len(urls) > 0 {
-			mediaCount = min(len(urls), 3) // 最多使用 3 张卡片图片
+		if len(assets) > 0 {
+			mediaCount = min(len(assets), 3) // 最多使用 3 张卡片图片
 		}
 
 		mediaParams := make([]db.CreatePostMediaParams, 0, mediaCount)
 		for j := range mediaCount {
-			var mediaURL string
-			if len(urls) > 0 {
-				mediaURL = urls[j]
+			asset := cardAsset{Width: 800, Height: 600}
+			if len(assets) > 0 {
+				asset = assets[j]
 			} else {
 				// fallback: 使用 picsum
-				mediaURL = fmt.Sprintf("https://picsum.photos/seed/%d/800/600", s.rng.IntN(1000)+i*100+j)
+				asset.URL = fmt.Sprintf("https://picsum.photos/seed/%d/800/600", s.rng.IntN(1000)+i*100+j)
 			}
 			mediaParams = append(mediaParams, db.CreatePostMediaParams{
 				ID:        uuid.Must(uuid.NewV7()),
 				PostID:    post.ID,
-				MediaURL:  mediaURL,
+				MediaURL:  asset.URL,
 				MediaType: db.MediaTypeEnumImage,
+				Width:     asset.Width,
+				Height:    asset.Height,
 				SortOrder: int16(j),
 			})
 		}
@@ -80,9 +82,11 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 				allMedia = append(allMedia, db.PostMedium{
 					ID:        param.ID,
 					PostID:    param.PostID,
-					MediaURL:  param.MediaURL,
-					MediaType: param.MediaType,
-					SortOrder: param.SortOrder,
+				MediaURL:  param.MediaURL,
+				MediaType: param.MediaType,
+				Width:     param.Width,
+				Height:    param.Height,
+				SortOrder: param.SortOrder,
 				})
 			}
 		}

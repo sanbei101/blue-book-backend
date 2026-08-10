@@ -48,3 +48,14 @@ func (p *Presigner) PresignPutObject(
 
 	return uploadURL, key, nil
 }
+
+// ImageDimensions returns the dimensions of an uploaded object without downloading
+// the complete image. The object key is resolved through a short-lived GET URL.
+func (p *Presigner) ImageDimensions(ctx context.Context, objectKey string) (width, height int32, err error) {
+	getURL, err := p.client.GetPresignedURL(objectKey, int64((5 * time.Minute).Seconds()))
+	if err != nil {
+		return 0, 0, fmt.Errorf("presign get object: %w", err)
+	}
+
+	return ImageDimensions(ctx, getURL)
+}

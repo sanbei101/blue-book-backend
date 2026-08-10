@@ -42,7 +42,7 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	userHandler := NewUserHandler(store)
-	postHandler := NewPostHandler(store)
+	postHandler := NewPostHandler(store, presigner)
 	commentHandler := NewCommentHandler(store)
 	likeHandler := NewLikeHandler(store)
 	followHandler := NewFollowHandler(store)

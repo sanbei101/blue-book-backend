@@ -12,6 +12,7 @@ require (
 	github.com/phuslu/log v1.0.128
 	github.com/purus-dev/aqua v1.0.3
 	golang.org/x/crypto v0.54.0
+	golang.org/x/image v0.40.0
 )
 
 require (

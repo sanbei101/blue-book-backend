@@ -16,6 +16,7 @@ import (
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
@@ -37,11 +38,12 @@ func Pagination(r *http.Request, defaultPage, defaultPageSize, maxPageSize int) 
 }
 
 type PostHandler struct {
-	store *db.Store
+	store     *db.Store
+	presigner *media.Presigner
 }
 
-func NewPostHandler(store *db.Store) *PostHandler {
-	return &PostHandler{store: store}
+func NewPostHandler(store *db.Store, presigner *media.Presigner) *PostHandler {
+	return &PostHandler{store: store, presigner: presigner}
 }
 
 type createPostRequest struct {
@@ -55,8 +57,8 @@ type createPostRequest struct {
 	Tags []string `json:"tags"`
 }
 type createMediaItem struct {
-	// 媒体 URL
-	MediaURL string `json:"media_url" validate:"required,url"`
+	// 媒体对象 key
+	MediaURL string `json:"media_url" validate:"required"`
 	// 媒体类型 (image/video)
 	MediaType string `json:"media_type" validate:"required,oneof=image video"`
 	// 排序序号
@@ -136,6 +138,10 @@ type mediaResponse struct {
 	MediaURL string `json:"media_url"`
 	// 媒体类型
 	MediaType string `json:"media_type"`
+	// 图片宽度
+	Width int32 `json:"width"`
+	// 图片高度
+	Height int32 `json:"height"`
 	// 排序序号
 	SortOrder int16 `json:"sort_order"`
 }
@@ -153,26 +159,47 @@ func toMediaResponse(m *db.PostMedium) mediaResponse {
 		ID:        m.ID,
 		MediaURL:  m.MediaURL,
 		MediaType: string(m.MediaType),
+		Width:     m.Width,
+		Height:    m.Height,
 		SortOrder: m.SortOrder,
 	}
 }
 
-func toCreatePostMediaParams(postID uuid.UUID, media []createMediaItem) []db.CreatePostMediaParams {
+func (h *PostHandler) toCreatePostMediaParams(
+	ctx context.Context,
+	postID uuid.UUID,
+	media []createMediaItem,
+) ([]db.CreatePostMediaParams, error) {
 	params := make([]db.CreatePostMediaParams, len(media))
 	for i, item := range media {
 		mediaType := db.MediaTypeEnumImage
 		if item.MediaType == "video" {
 			mediaType = db.MediaTypeEnumVideo
 		}
+
+		var width, height int32
+		if mediaType == db.MediaTypeEnumImage {
+			if h.presigner == nil {
+				return nil, media.ErrNotConfigured
+			}
+			var err error
+			width, height, err = h.presigner.ImageDimensions(ctx, item.MediaURL)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		params[i] = db.CreatePostMediaParams{
 			ID:        uuid.Must(uuid.NewV7()),
 			PostID:    postID,
 			MediaURL:  item.MediaURL,
 			MediaType: mediaType,
+			Width:     width,
+			Height:    height,
 			SortOrder: item.SortOrder,
 		}
 	}
-	return params
+	return params, nil
 }
 
 func normalizePostTags(tags []string) ([]string, error) {
@@ -244,11 +271,18 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentUserID := jwt.GetUserIDFromContext(r)
+	postID := uuid.Must(uuid.NewV7())
+	mediaParams, err := h.toCreatePostMediaParams(r.Context(), postID, body.Media)
+	if err != nil {
+		log.Error().Err(err).Msg("解析帖子媒体尺寸失败")
+		render.Error(w, http.StatusBadRequest, "无法读取图片尺寸")
+		return
+	}
 
 	var created db.Post
 	err = h.store.ExecTx(r.Context(), func(q *db.Queries) error {
 		post, err := q.CreatePost(r.Context(), db.CreatePostParams{
-			ID:      uuid.Must(uuid.NewV7()),
+			ID:      postID,
 			UserID:  currentUserID,
 			Title:   body.Title,
 			Content: body.Content,
@@ -258,8 +292,8 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		created = post
-		if len(body.Media) > 0 {
-			_, err := q.CreatePostMedia(r.Context(), toCreatePostMediaParams(post.ID, body.Media))
+		if len(mediaParams) > 0 {
+			_, err := q.CreatePostMedia(r.Context(), mediaParams)
 			if err != nil {
 				log.Error().Err(err).Msg("创建帖子媒体失败")
 				return err
@@ -545,6 +579,12 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	mediaParams, err := h.toCreatePostMediaParams(r.Context(), postID, body.Media)
+	if err != nil {
+		log.Error().Err(err).Msg("解析帖子媒体尺寸失败")
+		render.Error(w, http.StatusBadRequest, "无法读取图片尺寸")
+		return
+	}
 
 	var updated db.Post
 	err = h.store.ExecTx(r.Context(), func(q *db.Queries) error {
@@ -562,8 +602,8 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if err := q.DeletePostMediaByPostID(r.Context(), postID); err != nil {
 			return err
 		}
-		if len(body.Media) > 0 {
-			if _, err := q.CreatePostMedia(r.Context(), toCreatePostMediaParams(postID, body.Media)); err != nil {
+		if len(mediaParams) > 0 {
+			if _, err := q.CreatePostMedia(r.Context(), mediaParams); err != nil {
 				return err
 			}
 		}
