@@ -112,6 +112,8 @@ type PostMedium struct {
 	PostID    uuid.UUID     `json:"post_id"`
 	MediaURL  string        `json:"media_url"`
 	MediaType MediaTypeEnum `json:"media_type"`
+	Width     int32         `json:"width"`
+	Height    int32         `json:"height"`
 	SortOrder int16         `json:"sort_order"`
 	CreatedAt time.Time     `json:"created_at"`
 }

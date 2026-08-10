@@ -71,14 +71,18 @@ func ExportSQL(
 
 	// Post Media
 	sb.WriteString("-- Post Media\n")
-	sb.WriteString("INSERT INTO post_media (id, post_id, media_url, media_type, sort_order, created_at) VALUES\n")
+	sb.WriteString(
+		"INSERT INTO post_media (id, post_id, media_url, media_type, width, height, sort_order, created_at) VALUES\n",
+	)
 	for i := range media {
 		m := &media[i]
-		fmt.Fprintf(&sb, "    ('%s', '%s', '%s', '%s', %d, '%s')",
+		fmt.Fprintf(&sb, "    ('%s', '%s', '%s', '%s', %d, %d, %d, '%s')",
 			m.ID.String(),
 			m.PostID.String(),
 			escapeSQL(m.MediaURL),
 			string(m.MediaType),
+			m.Width,
+			m.Height,
 			m.SortOrder,
 			m.CreatedAt.Format(time.RFC3339))
 		if i < len(media)-1 {

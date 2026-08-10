@@ -8,30 +8,32 @@ import (
 	"github.com/phuslu/log"
 
 	"github.com/sanbei101/blue-book/internal/db"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
 // seedPosts 创建种子帖子和媒体
 func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []db.PostMedium, error) {
+	if s.presigner == nil {
+		return nil, nil, media.ErrNotConfigured
+	}
+
 	posts := make([]db.Post, 0, len(postSeeds))
 	allMedia := make([]db.PostMedium, 0, len(postSeeds)*3)
 
-	// 预先获取所有帖子的卡片 URL
+	// 预先获取并上传所有帖子的卡片图片
 	total := len(postSeeds)
-	log.Printf("Fetching card URLs from card engine... (0/%d)", total)
+	log.Printf("Fetching card images from card engine... (0/%d)", total)
 	cardAssets := make([][]cardAsset, 0, total)
 	for i, p := range postSeeds {
 		log.Printf("[%d/%d] Fetching cards for %q...", i+1, total, p.Title)
-		assets, err := cards.fetchCardURLs(ctx, s.rng, p.Title)
+		assets, err := cards.fetchCardAssets(ctx, s.rng, s.presigner, p.Title)
 		if err != nil {
-			log.Printf("[%d/%d] Warning: failed to fetch cards: %v, using fallback", i+1, total, err)
-			// 使用 picsum 作为 fallback
-			cardAssets = append(cardAssets, nil)
-			continue
+			return nil, nil, fmt.Errorf("fetch cards for post %d: %w", i, err)
 		}
 		cardAssets = append(cardAssets, assets)
 		log.Printf("[%d/%d] Done ✓", i+1, total)
 	}
-	log.Printf("Card URLs fetched successfully (%d/%d)", total, total)
+	log.Printf("Card images uploaded successfully (%d/%d)", total, total)
 
 	for i, p := range postSeeds {
 		author := users[s.rng.IntN(len(users))]
@@ -48,24 +50,15 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 
 		// 添加媒体图片
 		assets := cardAssets[i]
-		mediaCount := 1
-		if len(assets) > 0 {
-			mediaCount = min(len(assets), 3) // 最多使用 3 张卡片图片
-		}
+		mediaCount := min(len(assets), 3) // 最多使用 3 张卡片图片
 
 		mediaParams := make([]db.CreatePostMediaParams, 0, mediaCount)
 		for j := range mediaCount {
-			asset := cardAsset{Width: 800, Height: 600}
-			if len(assets) > 0 {
-				asset = assets[j]
-			} else {
-				// fallback: 使用 picsum
-				asset.URL = fmt.Sprintf("https://picsum.photos/seed/%d/800/600", s.rng.IntN(1000)+i*100+j)
-			}
+			asset := assets[j]
 			mediaParams = append(mediaParams, db.CreatePostMediaParams{
 				ID:        uuid.Must(uuid.NewV7()),
 				PostID:    post.ID,
-				MediaURL:  asset.URL,
+				MediaURL:  asset.ObjectKey,
 				MediaType: db.MediaTypeEnumImage,
 				Width:     asset.Width,
 				Height:    asset.Height,
@@ -82,11 +75,11 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 				allMedia = append(allMedia, db.PostMedium{
 					ID:        param.ID,
 					PostID:    param.PostID,
-				MediaURL:  param.MediaURL,
-				MediaType: param.MediaType,
-				Width:     param.Width,
-				Height:    param.Height,
-				SortOrder: param.SortOrder,
+					MediaURL:  param.MediaURL,
+					MediaType: param.MediaType,
+					Width:     param.Width,
+					Height:    param.Height,
+					SortOrder: param.SortOrder,
 				})
 			}
 		}

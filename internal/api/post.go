@@ -168,10 +168,10 @@ func toMediaResponse(m *db.PostMedium) mediaResponse {
 func (h *PostHandler) toCreatePostMediaParams(
 	ctx context.Context,
 	postID uuid.UUID,
-	media []createMediaItem,
+	items []createMediaItem,
 ) ([]db.CreatePostMediaParams, error) {
-	params := make([]db.CreatePostMediaParams, len(media))
-	for i, item := range media {
+	params := make([]db.CreatePostMediaParams, len(items))
+	for i, item := range items {
 		mediaType := db.MediaTypeEnumImage
 		if item.MediaType == "video" {
 			mediaType = db.MediaTypeEnumVideo
@@ -383,15 +383,15 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("增加帖子浏览量失败")
 	}
 
-	media, err := h.store.GetPostMediaByPostID(r.Context(), row.ID)
+	postMedia, err := h.store.GetPostMediaByPostID(r.Context(), row.ID)
 	if err != nil {
 		log.Error().Err(err).Msg("获取帖子媒体失败")
 		render.Error(w, http.StatusInternalServerError, "获取帖子媒体失败")
 		return
 	}
-	mediaList := make([]mediaResponse, 0, len(media))
-	for i := range media {
-		mediaList = append(mediaList, toMediaResponse(&media[i]))
+	mediaList := make([]mediaResponse, 0, len(postMedia))
+	for i := range postMedia {
+		mediaList = append(mediaList, toMediaResponse(&postMedia[i]))
 	}
 	tags, err := h.store.ListTagsByPostID(r.Context(), row.ID)
 	if err != nil {

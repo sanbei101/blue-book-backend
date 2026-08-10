@@ -10,22 +10,25 @@ import (
 	"github.com/phuslu/log"
 
 	"github.com/sanbei101/blue-book/internal/db"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
 type Seeder struct {
-	store *db.Store
-	pool  *pgxpool.Pool
-	rng   *rand.Rand
+	store     *db.Store
+	pool      *pgxpool.Pool
+	presigner *media.Presigner
+	rng       *rand.Rand
 }
 
-func NewSeeder(pool *pgxpool.Pool) *Seeder {
+func NewSeeder(pool *pgxpool.Pool, presigner *media.Presigner) *Seeder {
 	seed1 := uint64(time.Now().UnixNano())
 	seed2 := rand.Uint64()
 
 	return &Seeder{
-		store: db.NewStore(pool),
-		pool:  pool,
-		rng:   rand.New(rand.NewPCG(seed1, seed2)),
+		store:     db.NewStore(pool),
+		pool:      pool,
+		presigner: presigner,
+		rng:       rand.New(rand.NewPCG(seed1, seed2)),
 	}
 }
 
@@ -45,7 +48,7 @@ func (s *Seeder) Run(ctx context.Context) error {
 	}
 
 	// 创建帖子 + 媒体
-	posts, media, err := s.seedPosts(ctx, users)
+	posts, postMedia, err := s.seedPosts(ctx, users)
 	if err != nil {
 		return fmt.Errorf("seed posts: %w", err)
 	}
@@ -70,7 +73,7 @@ func (s *Seeder) Run(ctx context.Context) error {
 
 	// 导出 SQL 文件
 	filename := fmt.Sprintf("seed_%s.sql", time.Now().Format("20060102_150405"))
-	if err := ExportSQL(filename, users, posts, media, comments, likes, follows); err != nil {
+	if err := ExportSQL(filename, users, posts, postMedia, comments, likes, follows); err != nil {
 		log.Error().Err(err).Msg("Failed to export seed SQL")
 	} else {
 		log.Info().Str("file", filename).Msg("Seed SQL exported")

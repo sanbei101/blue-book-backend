@@ -56,6 +56,8 @@ type CreatePostMediaParams struct {
 	PostID    uuid.UUID     `json:"post_id"`
 	MediaURL  string        `json:"media_url"`
 	MediaType MediaTypeEnum `json:"media_type"`
+	Width     int32         `json:"width"`
+	Height    int32         `json:"height"`
 	SortOrder int16         `json:"sort_order"`
 }
 
@@ -157,7 +159,10 @@ func (q *Queries) GetPostByID(ctx context.Context, id uuid.UUID) (GetPostByIDRow
 }
 
 const getPostMediaByPostID = `-- name: GetPostMediaByPostID :many
-SELECT id, post_id, media_url, media_type, sort_order, created_at FROM post_media WHERE post_id = $1 ORDER BY sort_order
+SELECT id, post_id, media_url, media_type, width, height, sort_order, created_at
+FROM post_media
+WHERE post_id = $1
+ORDER BY sort_order
 `
 
 func (q *Queries) GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([]PostMedium, error) {
@@ -174,6 +179,8 @@ func (q *Queries) GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([
 			&i.PostID,
 			&i.MediaURL,
 			&i.MediaType,
+			&i.Width,
+			&i.Height,
 			&i.SortOrder,
 			&i.CreatedAt,
 		); err != nil {

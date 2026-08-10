@@ -54,9 +54,9 @@ type cardEngineResponse struct {
 }
 
 type cardAsset struct {
-	URL    string
-	Width  int32
-	Height int32
+	ObjectKey string
+	Width     int32
+	Height    int32
 }
 
 // cardCache 卡片 URL 缓存
@@ -69,8 +69,17 @@ var cards = &cardCache{
 	cache: make(map[string][]cardAsset),
 }
 
-// fetchCardURLs 调用卡片引擎 API 获取卡片图片 URL
-func (c *cardCache) fetchCardURLs(ctx context.Context, rng *rand.Rand, title string) ([]cardAsset, error) {
+// fetchCardAssets 调用卡片引擎 API 并读取对象存储中的图片尺寸。
+func (c *cardCache) fetchCardAssets(
+	ctx context.Context,
+	rng *rand.Rand,
+	presigner *media.Presigner,
+	title string,
+) ([]cardAsset, error) {
+	if presigner == nil {
+		return nil, media.ErrNotConfigured
+	}
+
 	// 检查缓存
 	c.mu.RLock()
 	if urls, ok := c.cache[title]; ok {
@@ -119,15 +128,15 @@ func (c *cardCache) fetchCardURLs(ctx context.Context, rng *rand.Rand, title str
 	assets := make([]cardAsset, 0, len(result.Templates))
 	for _, t := range result.Templates {
 		if t.URL != "" {
-			width, height, err := media.ImageDimensions(ctx, t.URL)
+			objectKey, err := presigner.ObjectKeyFromURL(t.URL)
+			if err != nil {
+				return nil, fmt.Errorf("parse card object URL: %w", err)
+			}
+			width, height, err := presigner.ImageDimensions(ctx, objectKey)
 			if err != nil {
 				return nil, fmt.Errorf("decode card image dimensions: %w", err)
 			}
-			assets = append(assets, cardAsset{
-				URL:    t.URL,
-				Width:  width,
-				Height: height,
-			})
+			assets = append(assets, cardAsset{ObjectKey: objectKey, Width: width, Height: height})
 		}
 	}
 	if len(assets) == 0 {

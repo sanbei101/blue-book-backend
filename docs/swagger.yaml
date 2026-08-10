@@ -158,7 +158,7 @@ components:
           - video
           type: string
         media_url:
-          description: 媒体 URL
+          description: 媒体对象 key
           type: string
         sort_order:
           description: 排序序号
@@ -349,6 +349,9 @@ components:
       type: object
     api.mediaResponse:
       properties:
+        height:
+          description: 图片高度
+          type: integer
         id:
           description: 媒体 ID
           type: string
@@ -360,6 +363,9 @@ components:
           type: string
         sort_order:
           description: 排序序号
+          type: integer
+        width:
+          description: 图片宽度
           type: integer
       type: object
     api.presignMediaRequest:
