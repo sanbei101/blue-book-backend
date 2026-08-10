@@ -159,7 +159,7 @@ func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.SuccessNoData(w, http.StatusNoContent, "删除成功")
+	render.SuccessNoData(w, "删除成功")
 }
 
 // ---- 帖子评论列表 ----

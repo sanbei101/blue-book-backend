@@ -150,12 +150,8 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.Success(w, "注册成功", authResponse{
-		AccessToken:  auth.AccessToken,
-		RefreshToken: auth.RefreshToken,
-		ExpiresIn:    auth.ExpiresIn,
-		User:         toUserResponse(&user),
-	})
+	auth.User = toUserResponse(&user)
+	render.Success(w, "注册成功", auth)
 }
 
 // ---- 登录 ----
@@ -200,12 +196,8 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.Success(w, "登录成功", authResponse{
-		AccessToken:  auth.AccessToken,
-		RefreshToken: auth.RefreshToken,
-		ExpiresIn:    auth.ExpiresIn,
-		User:         toUserResponse(&user),
-	})
+	auth.User = toUserResponse(&user)
+	render.Success(w, "登录成功", auth)
 }
 
 type refreshTokenRequest struct {
@@ -273,12 +265,8 @@ func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusUnauthorized, "刷新凭证无效或已过期")
 		return
 	}
-	render.Success(w, "刷新成功", authResponse{
-		AccessToken:  auth.AccessToken,
-		RefreshToken: auth.RefreshToken,
-		ExpiresIn:    auth.ExpiresIn,
-		User:         toUserResponse(&user),
-	})
+	auth.User = toUserResponse(&user)
+	render.Success(w, "刷新成功", auth)
 }
 
 // 获取当前登录用户
@@ -313,7 +301,7 @@ func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "退出登录失败")
 		return
 	}
-	render.SuccessNoData(w, http.StatusNoContent, "退出成功")
+	render.SuccessNoData(w, "退出成功")
 }
 
 type changePasswordRequest struct {
@@ -374,7 +362,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.SuccessNoData(w, http.StatusNoContent, "修改成功")
+	render.SuccessNoData(w, "修改成功")
 }
 
 // 获取用户资料

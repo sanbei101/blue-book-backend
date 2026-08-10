@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/phuslu/log"
 
 	"github.com/sanbei101/blue-book/internal/db"
@@ -57,11 +58,10 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		if _, err := q.GetUserByID(r.Context(), targetID); err != nil {
 			return err
 		}
-		rows, err := q.AddFollow(r.Context(), db.AddFollowParams{
+		if _, err := q.AddFollow(r.Context(), db.AddFollowParams{
 			FollowerID:  currentUserID,
 			FollowingID: targetID,
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 		following, err := q.IsFollowing(r.Context(), db.IsFollowingParams{
@@ -76,7 +76,6 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		resp = followStatusResponse{Following: following, FollowerCount: followerCount}
-		_ = rows
 		return nil
 	})
 	if err != nil {
@@ -160,16 +159,20 @@ type followUserResponse struct {
 	Bio string `json:"bio,omitempty"`
 }
 
-func toFollowUserResponse(u *db.ListFollowersRow) followUserResponse {
+func newFollowUserResponse(
+	id uuid.UUID,
+	username string,
+	avatarURL, bio pgtype.Text,
+) followUserResponse {
 	resp := followUserResponse{
-		ID:       u.ID,
-		Username: u.Username,
+		ID:       id,
+		Username: username,
 	}
-	if u.AvatarURL.Valid {
-		resp.AvatarURL = u.AvatarURL.String
+	if avatarURL.Valid {
+		resp.AvatarURL = avatarURL.String
 	}
-	if u.Bio.Valid {
-		resp.Bio = u.Bio.String
+	if bio.Valid {
+		resp.Bio = bio.String
 	}
 	return resp
 }
@@ -207,7 +210,12 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 
 	users := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		users = append(users, toFollowUserResponse(&rows[i]))
+		users = append(users, newFollowUserResponse(
+			rows[i].ID,
+			rows[i].Username,
+			rows[i].AvatarURL,
+			rows[i].Bio,
+		))
 	}
 
 	render.Success(w, "查询成功", users)
@@ -246,11 +254,12 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 
 	users := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		u := rows[i]
-		users = append(users, followUserResponse{
-			ID:       u.ID,
-			Username: u.Username,
-		})
+		users = append(users, newFollowUserResponse(
+			rows[i].ID,
+			rows[i].Username,
+			rows[i].AvatarURL,
+			rows[i].Bio,
+		))
 	}
 	// TODO: 返回互关状态
 

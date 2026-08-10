@@ -157,6 +157,24 @@ func toMediaResponse(m *db.PostMedium) mediaResponse {
 	}
 }
 
+func toCreatePostMediaParams(postID uuid.UUID, media []createMediaItem) []db.CreatePostMediaParams {
+	params := make([]db.CreatePostMediaParams, len(media))
+	for i, item := range media {
+		mediaType := db.MediaTypeEnumImage
+		if item.MediaType == "video" {
+			mediaType = db.MediaTypeEnumVideo
+		}
+		params[i] = db.CreatePostMediaParams{
+			ID:        uuid.Must(uuid.NewV7()),
+			PostID:    postID,
+			MediaURL:  item.MediaURL,
+			MediaType: mediaType,
+			SortOrder: item.SortOrder,
+		}
+	}
+	return params
+}
+
 func normalizePostTags(tags []string) ([]string, error) {
 	if len(tags) > 10 {
 		return nil, errors.New("最多添加 10 个标签")
@@ -241,22 +259,7 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		created = post
 		if len(body.Media) > 0 {
-			params := make([]db.CreatePostMediaParams, len(body.Media))
-			for i, m := range body.Media {
-				mediaType := db.MediaTypeEnumImage
-				if m.MediaType == "video" {
-					mediaType = db.MediaTypeEnumVideo
-				}
-
-				params[i] = db.CreatePostMediaParams{
-					ID:        uuid.Must(uuid.NewV7()),
-					PostID:    post.ID,
-					MediaURL:  m.MediaURL,
-					MediaType: mediaType,
-					SortOrder: m.SortOrder,
-				}
-			}
-			_, err := q.CreatePostMedia(r.Context(), params)
+			_, err := q.CreatePostMedia(r.Context(), toCreatePostMediaParams(post.ID, body.Media))
 			if err != nil {
 				log.Error().Err(err).Msg("创建帖子媒体失败")
 				return err
@@ -499,7 +502,7 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.SuccessNoData(w, http.StatusNoContent, "删除成功")
+	render.SuccessNoData(w, "删除成功")
 }
 
 type updatePostRequest struct {
@@ -560,21 +563,7 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if len(body.Media) > 0 {
-			params := make([]db.CreatePostMediaParams, len(body.Media))
-			for i, m := range body.Media {
-				mediaType := db.MediaTypeEnumImage
-				if m.MediaType == "video" {
-					mediaType = db.MediaTypeEnumVideo
-				}
-				params[i] = db.CreatePostMediaParams{
-					ID:        uuid.Must(uuid.NewV7()),
-					PostID:    postID,
-					MediaURL:  m.MediaURL,
-					MediaType: mediaType,
-					SortOrder: m.SortOrder,
-				}
-			}
-			if _, err := q.CreatePostMedia(r.Context(), params); err != nil {
+			if _, err := q.CreatePostMedia(r.Context(), toCreatePostMediaParams(postID, body.Media)); err != nil {
 				return err
 			}
 		}

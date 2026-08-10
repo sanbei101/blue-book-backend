@@ -154,14 +154,12 @@ func (h *DiscoveryHandler) searchUsers(
 	}
 	items := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		item := followUserResponse{ID: rows[i].ID, Username: rows[i].Username}
-		if rows[i].AvatarURL.Valid {
-			item.AvatarURL = rows[i].AvatarURL.String
-		}
-		if rows[i].Bio.Valid {
-			item.Bio = rows[i].Bio.String
-		}
-		items = append(items, item)
+		items = append(items, newFollowUserResponse(
+			rows[i].ID,
+			rows[i].Username,
+			rows[i].AvatarURL,
+			rows[i].Bio,
+		))
 	}
 	return items, nil
 }
@@ -361,7 +359,7 @@ func (h *DiscoveryHandler) DeleteHistory(w http.ResponseWriter, r *http.Request)
 		render.Error(w, http.StatusInternalServerError, "清空搜索历史失败")
 		return
 	}
-	render.SuccessNoData(w, http.StatusNoContent, "清空成功")
+	render.SuccessNoData(w, "清空成功")
 }
 
 type topicResponse struct {

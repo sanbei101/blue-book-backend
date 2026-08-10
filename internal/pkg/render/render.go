@@ -1,7 +1,9 @@
 package render
 
 import (
+	"bytes"
 	"encoding/json/v2"
+	"io"
 	"net/http"
 	"strings"
 
@@ -32,49 +34,69 @@ type errorResponse struct {
 }
 
 func Success[T any](w http.ResponseWriter, msg string, data T) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err := json.MarshalWrite(w, Response[T]{
+	writeJSON(w, http.StatusOK, Response[T]{
 		Code: http.StatusOK,
 		Msg:  msg,
 		Data: data,
 	})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to write success response")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
 }
 
-func SuccessNoData(w http.ResponseWriter, code int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	err := json.MarshalWrite(w, ResponseWithoutData{
-		Code: code,
+func SuccessNoData(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusNoContent, ResponseWithoutData{
+		Code: http.StatusNoContent,
 		Msg:  msg,
 	})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to write success response without data")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
 }
 
 func Error(w http.ResponseWriter, code int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	err := json.MarshalWrite(w, errorResponse{
+	writeJSON(w, code, errorResponse{
 		Code: code,
 		Msg:  msg,
 	})
+}
+
+func writeJSON(w http.ResponseWriter, code int, response any) {
+	if code == http.StatusNoContent {
+		w.WriteHeader(code)
+		return
+	}
+
+	payload, err := json.Marshal(response)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to write error response")
+		log.Error().Err(err).Msg("Failed to marshal response")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	if _, err := w.Write(payload); err != nil {
+		log.Error().Err(err).Msg("Failed to write response")
 	}
 }
 
 func ReadBody[T any](w http.ResponseWriter, r *http.Request) (T, error) {
+	return readBody[T](w, r, false)
+}
+
+func ReadOptionalBody[T any](w http.ResponseWriter, r *http.Request) (T, error) {
+	return readBody[T](w, r, true)
+}
+
+func readBody[T any](w http.ResponseWriter, r *http.Request, optional bool) (T, error) {
 	var body T
 
-	if err := json.UnmarshalRead(r.Body, &body); err != nil {
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read request body")
+		Error(w, http.StatusBadRequest, "JSON 格式非法")
+		return body, err
+	}
+	if optional && len(bytes.TrimSpace(payload)) == 0 {
+		return body, nil
+	}
+
+	if err := json.Unmarshal(payload, &body); err != nil {
 		log.Error().Err(err).Msg("Failed to read request body")
 		Error(w, http.StatusBadRequest, "JSON 格式非法")
 		return body, err

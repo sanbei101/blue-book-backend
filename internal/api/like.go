@@ -88,6 +88,10 @@ func (h *LikeHandler) LikePost(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "帖子不存在")
+			return
+		}
 		log.Error().Err(err).Msg("点赞帖子失败")
 		render.Error(w, http.StatusInternalServerError, "点赞失败")
 		return
@@ -176,18 +180,14 @@ func (h *LikeHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		comment, err := q.GetCommentByID(r.Context(), commentID)
-		if err != nil {
-			return err
-		}
 		if rows > 0 {
 			if err := q.IncrementCommentLikeCount(r.Context(), commentID); err != nil {
 				return err
 			}
-			comment, err = q.GetCommentByID(r.Context(), commentID)
-			if err != nil {
-				return err
-			}
+		}
+		comment, err := q.GetCommentByID(r.Context(), commentID)
+		if err != nil {
+			return err
 		}
 		resp = likeStatusResponse{Liked: true, LikeCount: int64(comment.LikeCount)}
 		return nil
@@ -228,18 +228,14 @@ func (h *LikeHandler) UnlikeComment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		comment, err := q.GetCommentByID(r.Context(), commentID)
-		if err != nil {
-			return err
-		}
 		if rows > 0 {
 			if err := q.DecrementCommentLikeCount(r.Context(), commentID); err != nil {
 				return err
 			}
-			comment, err = q.GetCommentByID(r.Context(), commentID)
-			if err != nil {
-				return err
-			}
+		}
+		comment, err := q.GetCommentByID(r.Context(), commentID)
+		if err != nil {
+			return err
 		}
 		resp = likeStatusResponse{Liked: false, LikeCount: int64(comment.LikeCount)}
 		return nil

@@ -49,11 +49,11 @@ func (h *CollectionHandler) Collect(w http.ResponseWriter, r *http.Request) {
 	}
 	userID := jwt.GetUserIDFromContext(r)
 
-	var folderID *uuid.UUID
-	body, err := render.ReadBody[collectPostRequest](w, r)
-	if err == nil && body.FolderID != nil {
-		folderID = body.FolderID
+	body, err := render.ReadOptionalBody[collectPostRequest](w, r)
+	if err != nil {
+		return
 	}
+	folderID := body.FolderID
 
 	var resp collectionStatusResponse
 	err = h.store.ExecTx(r.Context(), func(q *db.Queries) error {
@@ -120,6 +120,7 @@ type collectPostRequest struct {
 //	@Param		post_id	path		string	true	"帖子 ID"
 //	@Success	200		{object}	render.Response[collectionStatusResponse]
 //	@Failure	400		{object}	render.errorResponse
+//	@Failure	404		{object}	render.errorResponse
 //	@Failure	500		{object}	render.errorResponse
 //	@Router		/posts/{post_id}/collection [delete]
 func (h *CollectionHandler) Uncollect(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +160,10 @@ func (h *CollectionHandler) Uncollect(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "帖子不存在")
+			return
+		}
 		log.Error().Err(err).Msg("取消收藏失败")
 		render.Error(w, http.StatusInternalServerError, "取消收藏失败")
 		return
@@ -391,5 +396,5 @@ func (h *CollectionHandler) DeleteFolder(w http.ResponseWriter, r *http.Request)
 		render.Error(w, http.StatusNotFound, "收藏夹不存在")
 		return
 	}
-	render.SuccessNoData(w, http.StatusNoContent, "删除成功")
+	render.SuccessNoData(w, "删除成功")
 }

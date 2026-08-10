@@ -1638,6 +1638,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/render.errorResponse'
           description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.errorResponse'
+          description: Not Found
         "500":
           content:
             application/json:
