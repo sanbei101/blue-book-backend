@@ -35,6 +35,58 @@ CREATE TABLE posts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_posts_user_id ON posts(user_id);
+CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
+CREATE INDEX idx_posts_search ON posts USING GIN (
+    to_tsvector('simple', title || ' ' || content)
+);
+
+CREATE TABLE tags (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    name VARCHAR(50) UNIQUE NOT NULL,
+    description VARCHAR(200) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE post_tags (
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (post_id, tag_id)
+);
+CREATE INDEX idx_post_tags_tag_id ON post_tags(tag_id, created_at DESC);
+
+CREATE TABLE topics (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    name VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    cover_url VARCHAR(255) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE topic_posts (
+    topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (topic_id, post_id)
+);
+CREATE INDEX idx_topic_posts_post_id ON topic_posts(post_id);
+CREATE INDEX idx_topic_posts_topic_id ON topic_posts(topic_id, created_at DESC);
+
+CREATE TABLE search_history (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    keyword VARCHAR(100) NOT NULL,
+    searched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, keyword)
+);
+CREATE INDEX idx_search_history_user_id ON search_history(user_id, searched_at DESC);
+
+CREATE TABLE search_terms (
+    keyword VARCHAR(100) PRIMARY KEY,
+    search_count BIGINT NOT NULL DEFAULT 0,
+    last_searched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_search_terms_trending ON search_terms(search_count DESC, last_searched_at DESC);
 
 CREATE TYPE media_type_enum AS ENUM ('image', 'video');
 

@@ -48,12 +48,22 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 	followHandler := NewFollowHandler(store)
 	collectionHandler := NewCollectionHandler(store)
 	mediaHandler := NewMediaHandler(presigner)
+	discoveryHandler := NewDiscoveryHandler(store)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// 认证
 		r.Post("/auth/register", userHandler.Register)
 		r.Post("/auth/login", userHandler.Login)
 		r.Post("/auth/refresh", userHandler.Refresh)
+		r.With(jwt.OptionalAuthMiddleware).Get("/search", discoveryHandler.Search)
+		r.Get("/search/suggestions", discoveryHandler.Suggestions)
+		r.Get("/search/trending", discoveryHandler.Trending)
+		r.Get("/feed/recommended", discoveryHandler.Recommended)
+		r.Get("/tags/{tag_id}", discoveryHandler.GetTag)
+		r.Get("/tags/{tag_id}/posts", discoveryHandler.ListTagPosts)
+		r.Get("/topics", discoveryHandler.ListTopics)
+		r.Get("/topics/{topic_id}", discoveryHandler.GetTopic)
+		r.Get("/topics/{topic_id}/posts", discoveryHandler.ListTopicPosts)
 
 		// 公开路由
 		r.Get("/users/{user_id}", userHandler.GetProfile)
@@ -71,6 +81,9 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 			r.Post("/auth/logout", userHandler.Logout)
 			r.Put("/auth/password", userHandler.ChangePassword)
 			r.Put("/users/profile", userHandler.UpdateProfile)
+			r.Get("/me/search-history", discoveryHandler.ListHistory)
+			r.Delete("/me/search-history", discoveryHandler.DeleteHistory)
+			r.Post("/tags", discoveryHandler.CreateTag)
 
 			r.Post("/media/presign", mediaHandler.Presign)
 

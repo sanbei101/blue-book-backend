@@ -128,6 +128,36 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// OptionalAuthMiddleware 在凭证有效时注入用户 ID,凭证缺失或无效时继续访问公开接口。
+func OptionalAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if jwtVerifier == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		token, err := jwt.Parse([]byte(parts[1]), jwtVerifier)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		var claims userClaims
+		if err := json.Unmarshal(token.Claims(), &claims); err != nil ||
+			claims.UserID == uuid.Nil || !claims.IsValidAt(time.Now()) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func GetUserIDFromContext(r *http.Request) uuid.UUID {
 	id, _ := r.Context().Value(userIDKey).(uuid.UUID)
 	return id

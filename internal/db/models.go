@@ -116,6 +116,46 @@ type PostMedium struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type PostTag struct {
+	PostID    uuid.UUID `json:"post_id"`
+	TagID     uuid.UUID `json:"tag_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type SearchHistory struct {
+	UserID     uuid.UUID `json:"user_id"`
+	Keyword    string    `json:"keyword"`
+	SearchedAt time.Time `json:"searched_at"`
+}
+
+type SearchTerm struct {
+	Keyword        string    `json:"keyword"`
+	SearchCount    int64     `json:"search_count"`
+	LastSearchedAt time.Time `json:"last_searched_at"`
+}
+
+type Tag struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Topic struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CoverURL    string    `json:"cover_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type TopicPost struct {
+	TopicID   uuid.UUID `json:"topic_id"`
+	PostID    uuid.UUID `json:"post_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type User struct {
 	ID           uuid.UUID   `json:"id"`
 	Username     string      `json:"username"`

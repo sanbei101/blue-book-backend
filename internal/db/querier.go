@@ -15,11 +15,16 @@ type Querier interface {
 	AddCommentLike(ctx context.Context, arg AddCommentLikeParams) (int64, error)
 	AddFollow(ctx context.Context, arg AddFollowParams) (int64, error)
 	AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64, error)
+	AddPostTag(ctx context.Context, arg AddPostTagParams) (int64, error)
+	AddSearchHistory(ctx context.Context, arg AddSearchHistoryParams) error
+	CountTagPosts(ctx context.Context, tagID uuid.UUID) (int64, error)
+	CountTopicPosts(ctx context.Context, topicID uuid.UUID) (int64, error)
 	CreateCollectionFolder(ctx context.Context, arg CreateCollectionFolderParams) (CollectionFolder, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreatePostMedia(ctx context.Context, arg []CreatePostMediaParams) (int64, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (UserSession, error)
+	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementCommentLikeCount(ctx context.Context, id uuid.UUID) error
 	DecrementPostCollectCount(ctx context.Context, id uuid.UUID) error
@@ -29,6 +34,8 @@ type Querier interface {
 	DeleteComment(ctx context.Context, arg DeleteCommentParams) (int64, error)
 	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeletePostMediaByPostID(ctx context.Context, postID uuid.UUID) error
+	DeletePostTags(ctx context.Context, postID uuid.UUID) error
+	DeleteSearchHistory(ctx context.Context, userID uuid.UUID) error
 	GetActiveSessionByTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error)
 	GetCollectionFolderByID(ctx context.Context, arg GetCollectionFolderByIDParams) (CollectionFolder, error)
 	GetCommentByID(ctx context.Context, id uuid.UUID) (Comment, error)
@@ -36,6 +43,9 @@ type Querier interface {
 	GetFollowingCount(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetPostByID(ctx context.Context, id uuid.UUID) (GetPostByIDRow, error)
 	GetPostMediaByPostID(ctx context.Context, postID uuid.UUID) ([]PostMedium, error)
+	GetTagByID(ctx context.Context, id uuid.UUID) (Tag, error)
+	GetTagByName(ctx context.Context, name string) (Tag, error)
+	GetTopicByID(ctx context.Context, id uuid.UUID) (Topic, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	IncrementCommentLikeCount(ctx context.Context, id uuid.UUID) error
@@ -54,12 +64,23 @@ type Querier interface {
 	ListFollowing(ctx context.Context, arg ListFollowingParams) ([]ListFollowingRow, error)
 	ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error)
 	ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([]ListPostsFeedRow, error)
+	ListRecommendedPosts(ctx context.Context, arg ListRecommendedPostsParams) ([]ListRecommendedPostsRow, error)
+	ListSearchHistory(ctx context.Context, arg ListSearchHistoryParams) ([]ListSearchHistoryRow, error)
+	ListTagPosts(ctx context.Context, arg ListTagPostsParams) ([]ListTagPostsRow, error)
+	ListTagsByPostID(ctx context.Context, postID uuid.UUID) ([]Tag, error)
+	ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) ([]ListTopicPostsRow, error)
+	ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error)
+	ListTrendingSearches(ctx context.Context, limitCount int32) ([]ListTrendingSearchesRow, error)
+	RecordSearchTerm(ctx context.Context, keyword string) error
 	RemoveCollection(ctx context.Context, arg RemoveCollectionParams) (int64, error)
 	RemoveCommentLike(ctx context.Context, arg RemoveCommentLikeParams) (int64, error)
 	RemoveFollow(ctx context.Context, arg RemoveFollowParams) (int64, error)
 	RemovePostLike(ctx context.Context, arg RemovePostLikeParams) (int64, error)
 	RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
+	SearchPosts(ctx context.Context, arg SearchPostsParams) ([]SearchPostsRow, error)
+	SearchTags(ctx context.Context, arg SearchTagsParams) ([]Tag, error)
+	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error)
 	UpdateCollectionFolder(ctx context.Context, arg UpdateCollectionFolderParams) (CollectionFolder, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)

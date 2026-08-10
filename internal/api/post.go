@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -49,6 +51,8 @@ type createPostRequest struct {
 	Content string `json:"content" validate:"required"`
 	// 媒体列表
 	Media []createMediaItem `json:"media"`
+	// 标签名称
+	Tags []string `json:"tags"`
 }
 type createMediaItem struct {
 	// 媒体 URL
@@ -83,6 +87,8 @@ type getPostsResponse struct {
 	Liked bool `json:"liked"`
 	// 当前用户是否已收藏
 	Collected bool `json:"collected"`
+	// 标签列表
+	Tags []tagResponse `json:"tags,omitempty"`
 	// 作者信息
 	Author authorResponse `json:"author"`
 	// 媒体列表
@@ -151,6 +157,54 @@ func toMediaResponse(m *db.PostMedium) mediaResponse {
 	}
 }
 
+func normalizePostTags(tags []string) ([]string, error) {
+	if len(tags) > 10 {
+		return nil, errors.New("最多添加 10 个标签")
+	}
+
+	seen := make(map[string]struct{}, len(tags))
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(strings.TrimPrefix(tag, "#"))
+		if tag == "" {
+			continue
+		}
+		if len([]rune(tag)) > 50 {
+			return nil, errors.New("标签长度不能超过 50 个字符")
+		}
+		tag = strings.ToLower(tag)
+		if _, exists := seen[tag]; exists {
+			continue
+		}
+		seen[tag] = struct{}{}
+		result = append(result, tag)
+	}
+	return result, nil
+}
+
+func replacePostTags(ctx context.Context, q *db.Queries, postID uuid.UUID, tags []string) error {
+	if err := q.DeletePostTags(ctx, postID); err != nil {
+		return err
+	}
+	for _, name := range tags {
+		tag, err := q.CreateTag(ctx, db.CreateTagParams{
+			ID:          uuid.Must(uuid.NewV7()),
+			Name:        name,
+			Description: "",
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := q.AddPostTag(ctx, db.AddPostTagParams{
+			PostID: postID,
+			TagID:  tag.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // 创建帖子
 //
 //	@Summary	创建帖子
@@ -164,6 +218,11 @@ func toMediaResponse(m *db.PostMedium) mediaResponse {
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	body, err := render.ReadBody[createPostRequest](w, r)
 	if err != nil {
+		return
+	}
+	tags, err := normalizePostTags(body.Tags)
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	currentUserID := jwt.GetUserIDFromContext(r)
@@ -202,6 +261,10 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 				log.Error().Err(err).Msg("创建帖子媒体失败")
 				return err
 			}
+		}
+		if err := replacePostTags(r.Context(), q, post.ID, tags); err != nil {
+			log.Error().Err(err).Msg("创建帖子标签失败")
+			return err
 		}
 		return nil
 	})
@@ -293,6 +356,16 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	for i := range media {
 		mediaList = append(mediaList, toMediaResponse(&media[i]))
 	}
+	tags, err := h.store.ListTagsByPostID(r.Context(), row.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("获取帖子标签失败")
+		render.Error(w, http.StatusInternalServerError, "获取帖子标签失败")
+		return
+	}
+	tagList := make([]tagResponse, 0, len(tags))
+	for i := range tags {
+		tagList = append(tagList, toTagResponse(&tags[i]))
+	}
 
 	resp := getPostsResponse{
 		ID:           row.ID,
@@ -305,6 +378,7 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    row.CreatedAt,
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
 		Media:        mediaList,
+		Tags:         tagList,
 	}
 
 	if currentUserID := jwt.GetUserIDFromContext(r); currentUserID != uuid.Nil {
@@ -435,6 +509,8 @@ type updatePostRequest struct {
 	Content string `json:"content" validate:"required"`
 	// 媒体列表
 	Media []createMediaItem `json:"media"`
+	// 标签名称
+	Tags []string `json:"tags"`
 }
 
 // 编辑帖子
@@ -459,6 +535,11 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	currentUserID := jwt.GetUserIDFromContext(r)
 	body, err := render.ReadBody[updatePostRequest](w, r)
 	if err != nil {
+		return
+	}
+	tags, err := normalizePostTags(body.Tags)
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -496,6 +577,9 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 			if _, err := q.CreatePostMedia(r.Context(), params); err != nil {
 				return err
 			}
+		}
+		if err := replacePostTags(r.Context(), q, postID, tags); err != nil {
+			return err
 		}
 		return nil
 	})
