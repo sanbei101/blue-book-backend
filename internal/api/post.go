@@ -67,7 +67,7 @@ type createMediaItem struct {
 
 type createPostResponse struct {
 	// 帖子 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 }
 
 type pageResponse[T any] struct {
@@ -90,9 +90,9 @@ type getPostsResponse struct {
 	// 帖子 ID
 	ID uuid.UUID `json:"id" validate:"required"`
 	// 标题
-	Title string `json:"title"`
+	Title string `json:"title" validate:"required"`
 	// 内容
-	Content string `json:"content"`
+	Content string `json:"content" validate:"required"`
 	// 浏览量
 	ViewCount int64 `json:"view_count" validate:"required,min=0"`
 	// 点赞数
@@ -106,22 +106,22 @@ type getPostsResponse struct {
 	// 当前用户是否已收藏
 	ViewerCollected bool `json:"viewer_collected" validate:"required"`
 	// 标签列表
-	Tags []tagResponse `json:"tags,omitempty"`
+	Tags []tagResponse `json:"tags" validate:"required"`
 	// 作者信息
-	Author authorResponse `json:"author"`
+	Author authorResponse `json:"author" validate:"required"`
 	// 媒体列表
-	Media []mediaResponse `json:"media,omitempty"`
+	Media []mediaResponse `json:"media" validate:"required"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 type listPostsItemResponse struct {
 	// 帖子 ID
 	ID uuid.UUID `json:"id" validate:"required"`
 	// 标题
-	Title string `json:"title"`
+	Title string `json:"title" validate:"required"`
 	// 内容
-	Content string `json:"content"`
+	Content string `json:"content" validate:"required"`
 	// 浏览量
 	ViewCount int64 `json:"view_count" validate:"required,min=0"`
 	// 点赞数
@@ -135,37 +135,37 @@ type listPostsItemResponse struct {
 	// 当前用户是否已收藏
 	ViewerCollected bool `json:"viewer_collected" validate:"required"`
 	// 作者信息
-	Author authorResponse `json:"author"`
+	Author authorResponse `json:"author" validate:"required"`
 	// 封面 URL
-	CoverURL string `json:"cover_url,omitempty"`
+	CoverURL string `json:"cover_url" validate:"required"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 type authorResponse struct {
 	// 用户 ID
 	ID uuid.UUID `json:"id" validate:"required"`
 	// 用户名
-	Username string `json:"username"`
+	Username string `json:"username" validate:"required"`
 	// 头像地址
-	AvatarURL string `json:"avatar_url,omitempty"`
+	AvatarURL string `json:"avatar_url" validate:"required"`
 	// 当前用户是否已关注作者
 	ViewerFollowing bool `json:"viewer_following" validate:"required"`
 }
 
 type mediaResponse struct {
 	// 媒体 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 媒体 CDN URL
-	MediaURL string `json:"media_url"`
+	MediaURL string `json:"media_url" validate:"required"`
 	// 媒体类型
-	MediaType string `json:"media_type"`
+	MediaType string `json:"media_type" validate:"required"`
 	// 图片宽度
-	Width int32 `json:"width"`
+	Width int32 `json:"width" validate:"required,min=0"`
 	// 图片高度
-	Height int32 `json:"height"`
+	Height int32 `json:"height" validate:"required,min=0"`
 	// 排序序号
-	SortOrder int16 `json:"sort_order"`
+	SortOrder int16 `json:"sort_order" validate:"required,min=0"`
 }
 
 func toAuthorFromFeed(authorID uuid.UUID, authorUsername string, authorAvatar pgtype.Text) authorResponse {

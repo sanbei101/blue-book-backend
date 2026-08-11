@@ -152,11 +152,11 @@ type followUserResponse struct {
 	// 用户 ID
 	ID uuid.UUID `json:"id" validate:"required"`
 	// 用户名
-	Username string `json:"username"`
+	Username string `json:"username" validate:"required"`
 	// 头像地址
-	AvatarURL string `json:"avatar_url,omitempty"`
+	AvatarURL string `json:"avatar_url" validate:"required"`
 	// 个人简介
-	Bio string `json:"bio,omitempty"`
+	Bio string `json:"bio" validate:"required"`
 	// 当前用户是否已关注
 	ViewerFollowing bool `json:"viewer_following" validate:"required"`
 }

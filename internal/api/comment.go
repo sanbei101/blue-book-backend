@@ -203,17 +203,17 @@ type commentResponse struct {
 	// 父评论 ID,顶级评论为 nil
 	ParentID *uuid.UUID `json:"parent_id,omitempty"`
 	// 评论内容
-	Content string `json:"content"`
+	Content string `json:"content" validate:"required"`
 	// 点赞数
 	LikeCount int32 `json:"like_count" validate:"required,min=0"`
 	// 当前用户是否已点赞
 	ViewerLiked bool `json:"viewer_liked" validate:"required"`
 	// 作者用户名
-	AuthorUsername string `json:"author_username"`
+	AuthorUsername string `json:"author_username" validate:"required"`
 	// 作者头像地址
-	AuthorAvatar string `json:"author_avatar,omitempty"`
+	AuthorAvatar string `json:"author_avatar" validate:"required"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 // 获取帖子评论列表

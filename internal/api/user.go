@@ -38,13 +38,13 @@ type registerRequest struct {
 
 type authResponse struct {
 	// Access token
-	AccessToken string `json:"access_token"`
+	AccessToken string `json:"access_token" validate:"required"`
 	// Refresh token
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" validate:"required"`
 	// Access token 有效期,单位为秒
-	ExpiresIn int64 `json:"expires_in"`
+	ExpiresIn int64 `json:"expires_in" validate:"required,min=0"`
 	// 用户信息
-	User userResponse `json:"user"`
+	User userResponse `json:"user" validate:"required"`
 }
 
 func isUniqueViolation(err error) bool {
@@ -82,13 +82,13 @@ func (h *UserHandler) issueTokens(ctx context.Context, userID uuid.UUID) (authRe
 
 type userResponse struct {
 	// 用户 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 用户名
-	Username string `json:"username"`
+	Username string `json:"username" validate:"required"`
 	// 头像地址
-	AvatarURL string `json:"avatar_url,omitempty"`
+	AvatarURL string `json:"avatar_url" validate:"required"`
 	// 个人简介
-	Bio string `json:"bio,omitempty"`
+	Bio string `json:"bio" validate:"required"`
 }
 
 type userProfileResponse struct {

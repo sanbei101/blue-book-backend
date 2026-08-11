@@ -7,12 +7,18 @@ components:
           type: string
         expires_in:
           description: Access token 有效期,单位为秒
+          minimum: 0
           type: integer
         refresh_token:
           description: Refresh token
           type: string
         user:
           $ref: '#/components/schemas/api.userResponse'
+      required:
+      - access_token
+      - expires_in
+      - refresh_token
+      - user
       type: object
     api.authorResponse:
       description: 作者信息
@@ -30,7 +36,9 @@ components:
           description: 当前用户是否已关注作者
           type: boolean
       required:
+      - avatar_url
       - id
+      - username
       - viewer_following
       type: object
     api.changePasswordRequest:
@@ -100,6 +108,10 @@ components:
           description: 当前用户是否已点赞
           type: boolean
       required:
+      - author_avatar
+      - author_username
+      - content
+      - created_at
       - id
       - like_count
       - post_id
@@ -179,6 +191,8 @@ components:
         id:
           description: 帖子 ID
           type: string
+      required:
+      - id
       type: object
     api.createTagRequest:
       properties:
@@ -218,6 +232,10 @@ components:
         name:
           description: 收藏夹名称
           type: string
+      required:
+      - created_at
+      - id
+      - name
       type: object
     api.followStatusResponse:
       properties:
@@ -250,7 +268,10 @@ components:
           description: 当前用户是否已关注
           type: boolean
       required:
+      - avatar_url
+      - bio
       - id
+      - username
       - viewer_following
       type: object
     api.getPostsResponse:
@@ -304,10 +325,16 @@ components:
           description: 当前用户是否已点赞
           type: boolean
       required:
+      - author
       - collect_count
       - comment_count
+      - content
+      - created_at
       - id
       - like_count
+      - media
+      - tags
+      - title
       - view_count
       - viewer_collected
       - viewer_liked
@@ -367,10 +394,15 @@ components:
           description: 当前用户是否已点赞
           type: boolean
       required:
+      - author
       - collect_count
       - comment_count
+      - content
+      - cover_url
+      - created_at
       - id
       - like_count
+      - title
       - view_count
       - viewer_collected
       - viewer_liked
@@ -391,6 +423,7 @@ components:
       properties:
         height:
           description: 图片高度
+          minimum: 0
           type: integer
         id:
           description: 媒体 ID
@@ -403,10 +436,19 @@ components:
           type: string
         sort_order:
           description: 排序序号
+          minimum: 0
           type: integer
         width:
           description: 图片宽度
+          minimum: 0
           type: integer
+      required:
+      - height
+      - id
+      - media_type
+      - media_url
+      - sort_order
+      - width
       type: object
     api.pageResponse-api_commentResponse:
       properties:
@@ -596,6 +638,7 @@ components:
       properties:
         expires_in:
           description: 上传地址有效期,单位为秒
+          minimum: 0
           type: integer
         object_key:
           description: 对象存储 key,发布帖子时作为媒体 URL 使用
@@ -603,6 +646,10 @@ components:
         upload_url:
           description: 上传地址
           type: string
+      required:
+      - expires_in
+      - object_key
+      - upload_url
       type: object
     api.refreshTokenRequest:
       properties:
@@ -633,6 +680,9 @@ components:
           type: string
         searched_at:
           type: string
+      required:
+      - keyword
+      - searched_at
       type: object
     api.searchResponse:
       properties:
@@ -642,6 +692,10 @@ components:
           $ref: '#/components/schemas/api.pageResponse-api_tagResponse'
         users:
           $ref: '#/components/schemas/api.pageResponse-api_followUserResponse'
+      required:
+      - posts
+      - tags
+      - users
       type: object
     api.tagResponse:
       properties:
@@ -659,7 +713,14 @@ components:
           type: string
         post_count:
           description: 帖子数量
+          minimum: 0
           type: integer
+      required:
+      - created_at
+      - description
+      - id
+      - name
+      - post_count
       type: object
     api.topicResponse:
       properties:
@@ -680,14 +741,26 @@ components:
           type: string
         post_count:
           description: 专题帖子数量
+          minimum: 0
           type: integer
+      required:
+      - cover_url
+      - created_at
+      - description
+      - id
+      - name
+      - post_count
       type: object
     api.trendingSearchResponse:
       properties:
         keyword:
           type: string
         search_count:
+          minimum: 0
           type: integer
+      required:
+      - keyword
+      - search_count
       type: object
     api.updateFolderRequest:
       properties:
@@ -790,6 +863,11 @@ components:
         username:
           description: 用户名
           type: string
+      required:
+      - avatar_url
+      - bio
+      - id
+      - username
       type: object
     render.Response-api_authResponse:
       properties:

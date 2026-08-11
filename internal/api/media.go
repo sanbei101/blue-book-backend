@@ -26,11 +26,11 @@ type presignMediaRequest struct {
 
 type presignMediaResponse struct {
 	// 上传地址
-	UploadURL string `json:"upload_url"`
+	UploadURL string `json:"upload_url" validate:"required"`
 	// 对象存储 key,发布帖子时作为媒体 URL 使用
-	ObjectKey string `json:"object_key"`
+	ObjectKey string `json:"object_key" validate:"required"`
 	// 上传地址有效期,单位为秒
-	ExpiresIn int64 `json:"expires_in"`
+	ExpiresIn int64 `json:"expires_in" validate:"required,min=0"`
 }
 
 // 获取媒体上传地址

@@ -231,11 +231,11 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 type folderResponse struct {
 	// 收藏夹 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 收藏夹名称
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 func toFolderResponse(f *db.CollectionFolder) folderResponse {

@@ -27,15 +27,15 @@ func NewDiscoveryHandler(store *db.Store) *DiscoveryHandler {
 
 type tagResponse struct {
 	// 标签 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 标签名称
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required"`
 	// 标签描述
-	Description string `json:"description,omitempty"`
+	Description string `json:"description" validate:"required"`
 	// 帖子数量
-	PostCount int64 `json:"post_count,omitempty"`
+	PostCount int64 `json:"post_count" validate:"required,min=0"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 func toTagResponse(tag *db.Tag) tagResponse {
@@ -84,14 +84,14 @@ func toSearchPostFromTag(row *db.ListTagPostsRow) listPostsItemResponse {
 }
 
 type searchResponse struct {
-	Posts pageResponse[listPostsItemResponse] `json:"posts"`
-	Users pageResponse[followUserResponse]    `json:"users"`
-	Tags  pageResponse[tagResponse]           `json:"tags"`
+	Posts pageResponse[listPostsItemResponse] `json:"posts" validate:"required"`
+	Users pageResponse[followUserResponse]    `json:"users" validate:"required"`
+	Tags  pageResponse[tagResponse]           `json:"tags"  validate:"required"`
 }
 
 type searchHistoryResponse struct {
-	Keyword    string    `json:"keyword"`
-	SearchedAt time.Time `json:"searched_at"`
+	Keyword    string    `json:"keyword"     validate:"required"`
+	SearchedAt time.Time `json:"searched_at" validate:"required"`
 }
 
 func searchType(value string) (string, error) {
@@ -312,8 +312,8 @@ func (h *DiscoveryHandler) Suggestions(w http.ResponseWriter, r *http.Request) {
 }
 
 type trendingSearchResponse struct {
-	Keyword     string `json:"keyword"`
-	SearchCount int64  `json:"search_count"`
+	Keyword     string `json:"keyword"      validate:"required"`
+	SearchCount int64  `json:"search_count" validate:"required,min=0"`
 }
 
 // 获取热搜词
@@ -409,17 +409,17 @@ func (h *DiscoveryHandler) DeleteHistory(w http.ResponseWriter, r *http.Request)
 
 type topicResponse struct {
 	// 专题 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 专题名称
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required"`
 	// 专题描述
-	Description string `json:"description,omitempty"`
+	Description string `json:"description" validate:"required"`
 	// 封面地址
-	CoverURL string `json:"cover_url,omitempty"`
+	CoverURL string `json:"cover_url" validate:"required"`
 	// 专题帖子数量
-	PostCount int64 `json:"post_count"`
+	PostCount int64 `json:"post_count" validate:"required,min=0"`
 	// 创建时间
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
 func toTopicResponse(topic *db.Topic, postCount int64) topicResponse {
