@@ -138,6 +138,10 @@ type listPostsItemResponse struct {
 	Author authorResponse `json:"author" validate:"required"`
 	// 封面 URL
 	CoverURL string `json:"cover_url" validate:"required"`
+	// 封面宽度
+	Width int32 `json:"width" validate:"required,min=0"`
+	// 封面高度
+	Height int32 `json:"height" validate:"required,min=0"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
@@ -395,6 +399,8 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 			CommentCount: rows[i].CommentCount,
 			CreatedAt:    rows[i].CreatedAt,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
+			Width:        rows[i].Width,
+			Height:       rows[i].Height,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
 		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(
@@ -537,6 +543,8 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 			CommentCount: rows[i].CommentCount,
 			CreatedAt:    rows[i].CreatedAt,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
+			Width:        rows[i].Width,
+			Height:       rows[i].Height,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
 		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(

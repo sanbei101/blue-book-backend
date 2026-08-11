@@ -373,6 +373,10 @@ components:
         created_at:
           description: 创建时间
           type: string
+        height:
+          description: 封面高度
+          minimum: 0
+          type: integer
         id:
           description: 帖子 ID
           type: string
@@ -393,6 +397,10 @@ components:
         viewer_liked:
           description: 当前用户是否已点赞
           type: boolean
+        width:
+          description: 封面宽度
+          minimum: 0
+          type: integer
       required:
       - author
       - collect_count
@@ -400,12 +408,14 @@ components:
       - content
       - cover_url
       - created_at
+      - height
       - id
       - like_count
       - title
       - view_count
       - viewer_collected
       - viewer_liked
+      - width
       type: object
     api.loginRequest:
       properties:

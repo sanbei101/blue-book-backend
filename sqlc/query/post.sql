@@ -17,7 +17,9 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_key, '') AS cover_key
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height
 FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
@@ -27,7 +29,7 @@ FROM (
 ) p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_key
+    SELECT media_key, width, height
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC
@@ -52,11 +54,13 @@ SELECT
     p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
     p.comment_count, p.created_at,
     u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
-    COALESCE(pm.media_key, '') AS cover_key
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
-    SELECT media_key
+    SELECT media_key, width, height
     FROM post_media
     WHERE post_id = p.id
     ORDER BY sort_order ASC

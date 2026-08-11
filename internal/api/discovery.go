@@ -64,6 +64,8 @@ func toSearchPostResponse(row *db.SearchPostsRow) listPostsItemResponse {
 		CommentCount: row.CommentCount,
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
 		CoverURL:     media.CDNURL(row.CoverKey),
+		Width:        row.Width,
+		Height:       row.Height,
 		CreatedAt:    row.CreatedAt,
 	}
 }
@@ -79,6 +81,8 @@ func toSearchPostFromTag(row *db.ListTagPostsRow) listPostsItemResponse {
 		CommentCount: row.CommentCount,
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
 		CoverURL:     media.CDNURL(row.CoverKey),
+		Width:        row.Width,
+		Height:       row.Height,
 		CreatedAt:    row.CreatedAt,
 	}
 }
@@ -563,6 +567,8 @@ func (h *DiscoveryHandler) ListTopicPosts(w http.ResponseWriter, r *http.Request
 			CommentCount: rows[i].CommentCount,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
+			Width:        rows[i].Width,
+			Height:       rows[i].Height,
 			CreatedAt:    rows[i].CreatedAt,
 		}
 		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
@@ -751,6 +757,8 @@ func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
 			CommentCount: rows[i].CommentCount,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
+			Width:        rows[i].Width,
+			Height:       rows[i].Height,
 			CreatedAt:    rows[i].CreatedAt,
 		}
 		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(

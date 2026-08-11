@@ -214,6 +214,8 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
+			Width:        rows[i].Width,
+			Height:       rows[i].Height,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
 		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
