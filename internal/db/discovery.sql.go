@@ -49,6 +49,68 @@ func (q *Queries) AddSearchHistory(ctx context.Context, arg AddSearchHistoryPara
 	return err
 }
 
+const countRecommendedPosts = `-- name: CountRecommendedPosts :one
+SELECT COUNT(*)::bigint FROM posts
+`
+
+func (q *Queries) CountRecommendedPosts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countRecommendedPosts)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countSearchHistory = `-- name: CountSearchHistory :one
+SELECT COUNT(*)::bigint FROM search_history WHERE user_id = $1
+`
+
+func (q *Queries) CountSearchHistory(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchHistory, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countSearchPosts = `-- name: CountSearchPosts :one
+SELECT COUNT(*)::bigint
+FROM posts
+WHERE to_tsvector('simple', title || ' ' || content)
+      @@ plainto_tsquery('simple', $1)
+`
+
+func (q *Queries) CountSearchPosts(ctx context.Context, searchQuery string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchPosts, searchQuery)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countSearchTags = `-- name: CountSearchTags :one
+SELECT COUNT(*)::bigint
+FROM tags
+WHERE name ILIKE '%' || $1 || '%'
+`
+
+func (q *Queries) CountSearchTags(ctx context.Context, searchQuery pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchTags, searchQuery)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countSearchUsers = `-- name: CountSearchUsers :one
+SELECT COUNT(*)::bigint
+FROM users
+WHERE username ILIKE '%' || $1 || '%'
+`
+
+func (q *Queries) CountSearchUsers(ctx context.Context, searchQuery pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchUsers, searchQuery)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countTagPosts = `-- name: CountTagPosts :one
 SELECT COUNT(*)::bigint
 FROM post_tags
@@ -70,6 +132,28 @@ WHERE topic_id = $1
 
 func (q *Queries) CountTopicPosts(ctx context.Context, topicID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countTopicPosts, topicID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countTopics = `-- name: CountTopics :one
+SELECT COUNT(*)::bigint FROM topics
+`
+
+func (q *Queries) CountTopics(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTopics)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countTrendingSearches = `-- name: CountTrendingSearches :one
+SELECT COUNT(*)::bigint FROM search_terms
+`
+
+func (q *Queries) CountTrendingSearches(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTrendingSearches)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -185,7 +269,7 @@ LEFT JOIN LATERAL (
 ) pm ON true
 ORDER BY (
     p.like_count * 3 + p.collect_count * 4 + p.comment_count * 2 + p.view_count
-) DESC, p.created_at DESC
+) DESC, p.created_at DESC, p.id DESC
 LIMIT $2 OFFSET $1
 `
 
@@ -246,13 +330,14 @@ const listSearchHistory = `-- name: ListSearchHistory :many
 SELECT keyword, searched_at
 FROM search_history
 WHERE user_id = $1
-ORDER BY searched_at DESC
-LIMIT $2
+ORDER BY searched_at DESC, keyword ASC
+LIMIT $3 OFFSET $2
 `
 
 type ListSearchHistoryParams struct {
-	UserID     uuid.UUID `json:"user_id"`
-	LimitCount int32     `json:"limit_count"`
+	UserID      uuid.UUID `json:"user_id"`
+	OffsetCount int32     `json:"offset_count"`
+	LimitCount  int32     `json:"limit_count"`
 }
 
 type ListSearchHistoryRow struct {
@@ -261,7 +346,7 @@ type ListSearchHistoryRow struct {
 }
 
 func (q *Queries) ListSearchHistory(ctx context.Context, arg ListSearchHistoryParams) ([]ListSearchHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listSearchHistory, arg.UserID, arg.LimitCount)
+	rows, err := q.db.Query(ctx, listSearchHistory, arg.UserID, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +382,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE pt.tag_id = $1
-ORDER BY p.created_at DESC
+ORDER BY p.created_at DESC, p.id DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -405,7 +490,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE tp.topic_id = $1
-ORDER BY tp.created_at DESC
+ORDER BY tp.created_at DESC, tp.post_id DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -465,7 +550,7 @@ func (q *Queries) ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) 
 
 const listTopics = `-- name: ListTopics :many
 SELECT id, name, description, cover_url, created_at, updated_at FROM topics
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $1
 `
 
@@ -504,17 +589,22 @@ func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic
 const listTrendingSearches = `-- name: ListTrendingSearches :many
 SELECT keyword, search_count
 FROM search_terms
-ORDER BY search_count DESC, last_searched_at DESC
-LIMIT $1
+ORDER BY search_count DESC, last_searched_at DESC, keyword ASC
+LIMIT $2 OFFSET $1
 `
+
+type ListTrendingSearchesParams struct {
+	OffsetCount int32 `json:"offset_count"`
+	LimitCount  int32 `json:"limit_count"`
+}
 
 type ListTrendingSearchesRow struct {
 	Keyword     string `json:"keyword"`
 	SearchCount int64  `json:"search_count"`
 }
 
-func (q *Queries) ListTrendingSearches(ctx context.Context, limitCount int32) ([]ListTrendingSearchesRow, error) {
-	rows, err := q.db.Query(ctx, listTrendingSearches, limitCount)
+func (q *Queries) ListTrendingSearches(ctx context.Context, arg ListTrendingSearchesParams) ([]ListTrendingSearchesRow, error) {
+	rows, err := q.db.Query(ctx, listTrendingSearches, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -568,7 +658,7 @@ LEFT JOIN LATERAL (
 ) pm ON true
 WHERE to_tsvector('simple', p.title || ' ' || p.content)
       @@ plainto_tsquery('simple', $1)
-ORDER BY relevance DESC, p.created_at DESC
+ORDER BY relevance DESC, p.created_at DESC, p.id DESC
 LIMIT $3 OFFSET $2
 `
 

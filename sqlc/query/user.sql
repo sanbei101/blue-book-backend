@@ -17,6 +17,21 @@ UPDATE users SET username = @username, avatar_url = @avatar_url, bio = @bio, upd
 -- name: UpdateUserPassword :execrows
 UPDATE users SET password_hash = @password_hash, updated_at = NOW() WHERE id = @id;
 
+-- name: CountPostsByUser :one
+SELECT COUNT(*)::bigint FROM posts WHERE user_id = @user_id;
+
+-- name: CountReceivedLikeAndCollectByUser :one
+SELECT
+    ((SELECT COUNT(*)::bigint
+      FROM likes l
+      JOIN posts p ON p.id = l.target_id
+      WHERE p.user_id = @user_id AND l.target_type = 1)
+     +
+     (SELECT COUNT(*)::bigint
+      FROM collections c
+      JOIN posts p ON p.id = c.post_id
+      WHERE p.user_id = @user_id))::bigint;
+
 -- name: CreateSession :one
 INSERT INTO user_sessions (
     id, user_id, refresh_token_hash, expires_at

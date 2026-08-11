@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -54,22 +53,8 @@ func tagResponseWithCount(tag *db.Tag, postCount int64) tagResponse {
 	return response
 }
 
-type searchPostResponse struct {
-	ID           uuid.UUID      `json:"id"`
-	Title        string         `json:"title"`
-	Content      string         `json:"content"`
-	ViewCount    int64          `json:"view_count"`
-	LikeCount    int64          `json:"like_count"`
-	CollectCount int64          `json:"collect_count"`
-	CommentCount int64          `json:"comment_count"`
-	Author       authorResponse `json:"author"`
-	CoverURL     string         `json:"cover_url,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	Relevance    float32        `json:"relevance,omitempty"`
-}
-
-func toSearchPostResponse(row *db.SearchPostsRow) searchPostResponse {
-	return searchPostResponse{
+func toSearchPostResponse(row *db.SearchPostsRow) listPostsItemResponse {
+	return listPostsItemResponse{
 		ID:           row.ID,
 		Title:        row.Title,
 		Content:      row.Content,
@@ -80,7 +65,6 @@ func toSearchPostResponse(row *db.SearchPostsRow) searchPostResponse {
 		Author:       toAuthorFromFeed(row.AuthorID, row.AuthorUsername, row.AuthorAvatar),
 		CoverURL:     media.CDNURL(row.CoverKey),
 		CreatedAt:    row.CreatedAt,
-		Relevance:    row.Relevance,
 	}
 }
 
@@ -100,9 +84,9 @@ func toSearchPostFromTag(row *db.ListTagPostsRow) listPostsItemResponse {
 }
 
 type searchResponse struct {
-	Posts []searchPostResponse `json:"posts,omitempty"`
-	Users []followUserResponse `json:"users,omitempty"`
-	Tags  []tagResponse        `json:"tags,omitempty"`
+	Posts pageResponse[listPostsItemResponse] `json:"posts"`
+	Users pageResponse[followUserResponse]    `json:"users"`
+	Tags  pageResponse[tagResponse]           `json:"tags"`
 }
 
 type searchHistoryResponse struct {
@@ -124,61 +108,93 @@ func (h *DiscoveryHandler) searchPosts(
 	r *http.Request,
 	keyword string,
 	offset, limit int,
-) ([]searchPostResponse, error) {
+) ([]listPostsItemResponse, int64, error) {
 	rows, err := h.store.SearchPosts(r.Context(), db.SearchPostsParams{
 		SearchQuery: keyword,
 		OffsetCount: int32(offset),
 		LimitCount:  int32(limit),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	items := make([]searchPostResponse, 0, len(rows))
+	total, err := h.store.CountSearchPosts(r.Context(), keyword)
+	if err != nil {
+		return nil, 0, err
+	}
+	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, toSearchPostResponse(&rows[i]))
+		item := toSearchPostResponse(&rows[i])
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
 	}
-	return items, nil
+	return items, total, nil
 }
 
 func (h *DiscoveryHandler) searchUsers(
 	r *http.Request,
 	keyword string,
 	offset, limit int,
-) ([]followUserResponse, error) {
+) ([]followUserResponse, int64, error) {
 	rows, err := h.store.SearchUsers(r.Context(), db.SearchUsersParams{
 		SearchQuery: pgtype.Text{String: keyword, Valid: true},
 		OffsetCount: int32(offset),
 		LimitCount:  int32(limit),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := h.store.CountSearchUsers(r.Context(), pgtype.Text{String: keyword, Valid: true})
+	if err != nil {
+		return nil, 0, err
 	}
 	items := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, newFollowUserResponse(
+		item := newFollowUserResponse(
 			rows[i].ID,
 			rows[i].Username,
 			rows[i].AvatarURL,
 			rows[i].Bio,
-		))
+		)
+		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
+			item.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
+				FollowerID: viewerID, FollowingID: item.ID,
+			})
+			if err != nil {
+				return nil, 0, err
+			}
+		}
+		items = append(items, item)
 	}
-	return items, nil
+	return items, total, nil
 }
 
-func (h *DiscoveryHandler) searchTags(r *http.Request, keyword string, offset, limit int) ([]tagResponse, error) {
+func (h *DiscoveryHandler) searchTags(
+	r *http.Request,
+	keyword string,
+	offset, limit int,
+) ([]tagResponse, int64, error) {
 	rows, err := h.store.SearchTags(r.Context(), db.SearchTagsParams{
 		SearchQuery: pgtype.Text{String: keyword, Valid: true},
 		OffsetCount: int32(offset),
 		LimitCount:  int32(limit),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := h.store.CountSearchTags(r.Context(), pgtype.Text{String: keyword, Valid: true})
+	if err != nil {
+		return nil, 0, err
 	}
 	items := make([]tagResponse, 0, len(rows))
 	for i := range rows {
 		items = append(items, toTagResponse(&rows[i]))
 	}
-	return items, nil
+	return items, total, nil
 }
 
 // 综合搜索
@@ -218,31 +234,44 @@ func (h *DiscoveryHandler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := searchResponse{}
+	response := searchResponse{
+		Posts: newPageResponse([]listPostsItemResponse{}, offset, pageSize, 0),
+		Users: newPageResponse([]followUserResponse{}, offset, pageSize, 0),
+		Tags:  newPageResponse([]tagResponse{}, offset, pageSize, 0),
+	}
 	switch typeValue {
 	case "all", "posts":
-		response.Posts, err = h.searchPosts(r, keyword, offset, pageSize)
+		var items []listPostsItemResponse
+		var total int64
+		items, total, err = h.searchPosts(r, keyword, offset, pageSize)
 		if err != nil {
 			log.Error().Err(err).Msg("搜索帖子失败")
 			render.Error(w, http.StatusInternalServerError, "搜索失败")
 			return
 		}
+		response.Posts = newPageResponse(items, offset, pageSize, total)
 	}
 	if typeValue == "all" || typeValue == "users" {
-		response.Users, err = h.searchUsers(r, keyword, offset, pageSize)
+		var items []followUserResponse
+		var total int64
+		items, total, err = h.searchUsers(r, keyword, offset, pageSize)
 		if err != nil {
 			log.Error().Err(err).Msg("搜索用户失败")
 			render.Error(w, http.StatusInternalServerError, "搜索失败")
 			return
 		}
+		response.Users = newPageResponse(items, offset, pageSize, total)
 	}
 	if typeValue == "all" || typeValue == "tags" {
-		response.Tags, err = h.searchTags(r, keyword, offset, pageSize)
+		var items []tagResponse
+		var total int64
+		items, total, err = h.searchTags(r, keyword, offset, pageSize)
 		if err != nil {
 			log.Error().Err(err).Msg("搜索标签失败")
 			render.Error(w, http.StatusInternalServerError, "搜索失败")
 			return
 		}
+		response.Tags = newPageResponse(items, offset, pageSize, total)
 	}
 
 	render.Success(w, "搜索成功", response)
@@ -263,19 +292,23 @@ func (h *DiscoveryHandler) Suggestions(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, "关键词不能为空且不能超过 100 个字符")
 		return
 	}
-	users, err := h.searchUsers(r, keyword, 0, 5)
+	users, userTotal, err := h.searchUsers(r, keyword, 0, 5)
 	if err != nil {
 		log.Error().Err(err).Msg("获取用户联想失败")
 		render.Error(w, http.StatusInternalServerError, "获取联想失败")
 		return
 	}
-	tags, err := h.searchTags(r, keyword, 0, 5)
+	tags, tagTotal, err := h.searchTags(r, keyword, 0, 5)
 	if err != nil {
 		log.Error().Err(err).Msg("获取标签联想失败")
 		render.Error(w, http.StatusInternalServerError, "获取联想失败")
 		return
 	}
-	render.Success(w, "查询成功", searchResponse{Users: users, Tags: tags})
+	render.Success(w, "查询成功", searchResponse{
+		Posts: newPageResponse([]listPostsItemResponse{}, 0, 5, 0),
+		Users: newPageResponse(users, 0, 5, userTotal),
+		Tags:  newPageResponse(tags, 0, 5, tagTotal),
+	})
 }
 
 type trendingSearchResponse struct {
@@ -287,24 +320,25 @@ type trendingSearchResponse struct {
 //
 //	@Summary	获取热搜词
 //	@Tags		discovery
-//	@Param		limit	query		int	false	"数量"	default(10)
-//	@Success	200		{object}	render.Response[[]trendingSearchResponse]
-//	@Failure	500		{object}	render.errorResponse
+//	@Param		page		query		int	false	"页码"	default(1)
+//	@Param		page_size	query		int	false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[trendingSearchResponse]]
+//	@Failure	500			{object}	render.errorResponse
 //	@Router		/search/trending [get]
 func (h *DiscoveryHandler) Trending(w http.ResponseWriter, r *http.Request) {
-	limit := 10
-	if value := r.URL.Query().Get("limit"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > 50 {
-		limit = 50
-	}
-	rows, err := h.store.ListTrendingSearches(r.Context(), int32(limit))
+	offset, pageSize := Pagination(r, 1, 20, 50)
+	rows, err := h.store.ListTrendingSearches(r.Context(), db.ListTrendingSearchesParams{
+		OffsetCount: int32(offset),
+		LimitCount:  int32(pageSize),
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("获取热搜失败")
+		render.Error(w, http.StatusInternalServerError, "获取热搜失败")
+		return
+	}
+	total, err := h.store.CountTrendingSearches(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("统计热搜失败")
 		render.Error(w, http.StatusInternalServerError, "获取热搜失败")
 		return
 	}
@@ -315,7 +349,7 @@ func (h *DiscoveryHandler) Trending(w http.ResponseWriter, r *http.Request) {
 			SearchCount: rows[i].SearchCount,
 		})
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 // 获取搜索历史
@@ -323,16 +357,26 @@ func (h *DiscoveryHandler) Trending(w http.ResponseWriter, r *http.Request) {
 //	@Summary	获取搜索历史
 //	@Tags		discovery
 //	@Security	BearerAuth
-//	@Success	200	{object}	render.Response[[]searchHistoryResponse]
-//	@Failure	500	{object}	render.errorResponse
+//	@Param		page		query		int	false	"页码"	default(1)
+//	@Param		page_size	query		int	false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[searchHistoryResponse]]
+//	@Failure	500			{object}	render.errorResponse
 //	@Router		/me/search-history [get]
 func (h *DiscoveryHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
+	offset, pageSize := Pagination(r, 1, 20, 50)
 	rows, err := h.store.ListSearchHistory(r.Context(), db.ListSearchHistoryParams{
-		UserID:     jwt.GetUserIDFromContext(r),
-		LimitCount: 50,
+		UserID:      jwt.GetUserIDFromContext(r),
+		OffsetCount: int32(offset),
+		LimitCount:  int32(pageSize),
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("获取搜索历史失败")
+		render.Error(w, http.StatusInternalServerError, "获取搜索历史失败")
+		return
+	}
+	total, err := h.store.CountSearchHistory(r.Context(), jwt.GetUserIDFromContext(r))
+	if err != nil {
+		log.Error().Err(err).Msg("统计搜索历史失败")
 		render.Error(w, http.StatusInternalServerError, "获取搜索历史失败")
 		return
 	}
@@ -343,7 +387,7 @@ func (h *DiscoveryHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
 			SearchedAt: rows[i].SearchedAt,
 		})
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 // 清空搜索历史
@@ -395,7 +439,7 @@ func toTopicResponse(topic *db.Topic, postCount int64) topicResponse {
 //	@Tags		discovery
 //	@Param		page		query		int	false	"页码"	default(1)
 //	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]topicResponse]
+//	@Success	200			{object}	render.Response[pageResponse[topicResponse]]
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/topics [get]
 func (h *DiscoveryHandler) ListTopics(w http.ResponseWriter, r *http.Request) {
@@ -409,6 +453,12 @@ func (h *DiscoveryHandler) ListTopics(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取专题列表失败")
 		return
 	}
+	total, err := h.store.CountTopics(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("统计专题列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取专题列表失败")
+		return
+	}
 	items := make([]topicResponse, 0, len(topics))
 	for i := range topics {
 		count, err := h.store.CountTopicPosts(r.Context(), topics[i].ID)
@@ -419,7 +469,7 @@ func (h *DiscoveryHandler) ListTopics(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, toTopicResponse(&topics[i], count))
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 // 获取专题详情
@@ -464,7 +514,7 @@ func (h *DiscoveryHandler) GetTopic(w http.ResponseWriter, r *http.Request) {
 //	@Param		topic_id	path		string	true	"专题 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]listPostsItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	404			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
@@ -495,9 +545,15 @@ func (h *DiscoveryHandler) ListTopicPosts(w http.ResponseWriter, r *http.Request
 		render.Error(w, http.StatusInternalServerError, "获取专题帖子失败")
 		return
 	}
+	total, err := h.store.CountTopicPosts(r.Context(), topicID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计专题帖子失败")
+		render.Error(w, http.StatusInternalServerError, "获取专题帖子失败")
+		return
+	}
 	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, listPostsItemResponse{
+		item := listPostsItemResponse{
 			ID:           rows[i].ID,
 			Title:        rows[i].Title,
 			Content:      rows[i].Content,
@@ -508,9 +564,18 @@ func (h *DiscoveryHandler) ListTopicPosts(w http.ResponseWriter, r *http.Request
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			CreatedAt:    rows[i].CreatedAt,
-		})
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取专题帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取专题帖子失败")
+			return
+		}
+		items = append(items, item)
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 type createTagRequest struct {
@@ -595,7 +660,7 @@ func (h *DiscoveryHandler) GetTag(w http.ResponseWriter, r *http.Request) {
 //	@Param		tag_id		path		string	true	"标签 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]listPostsItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	404			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
@@ -626,11 +691,26 @@ func (h *DiscoveryHandler) ListTagPosts(w http.ResponseWriter, r *http.Request) 
 		render.Error(w, http.StatusInternalServerError, "获取标签帖子失败")
 		return
 	}
+	total, err := h.store.CountTagPosts(r.Context(), tagID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计标签帖子失败")
+		render.Error(w, http.StatusInternalServerError, "获取标签帖子失败")
+		return
+	}
 	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, toSearchPostFromTag(&rows[i]))
+		item := toSearchPostFromTag(&rows[i])
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取标签帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取标签帖子失败")
+			return
+		}
+		items = append(items, item)
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 // 获取发现流
@@ -639,7 +719,7 @@ func (h *DiscoveryHandler) ListTagPosts(w http.ResponseWriter, r *http.Request) 
 //	@Tags		discovery
 //	@Param		page		query		int	false	"页码"	default(1)
 //	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]listPostsItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/feed/recommended [get]
 func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
@@ -653,9 +733,15 @@ func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取发现流失败")
 		return
 	}
+	total, err := h.store.CountRecommendedPosts(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("统计发现流失败")
+		render.Error(w, http.StatusInternalServerError, "获取发现流失败")
+		return
+	}
 	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, listPostsItemResponse{
+		item := listPostsItemResponse{
 			ID:           rows[i].ID,
 			Title:        rows[i].Title,
 			Content:      rows[i].Content,
@@ -666,7 +752,16 @@ func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			CreatedAt:    rows[i].CreatedAt,
-		})
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取发现流查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取发现流失败")
+			return
+		}
+		items = append(items, item)
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }

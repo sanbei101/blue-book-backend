@@ -24,5 +24,8 @@ SELECT
 FROM comments c
 JOIN users u ON c.user_id = u.id
 WHERE c.post_id = @post_id
-ORDER BY c.created_at ASC
+ORDER BY c.created_at ASC, c.id ASC
 LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CountCommentsByPostID :one
+SELECT COUNT(*)::bigint FROM comments WHERE post_id = @post_id;

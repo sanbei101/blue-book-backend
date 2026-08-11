@@ -13,6 +13,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countPostsByUserID = `-- name: CountPostsByUserID :one
+SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1
+`
+
+func (q *Queries) CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPostsByUserID, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countPostsFeed = `-- name: CountPostsFeed :one
+SELECT COUNT(*)::bigint FROM posts
+`
+
+func (q *Queries) CountPostsFeed(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPostsFeed)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
     id, user_id, title, content
@@ -246,7 +268,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE p.user_id = $1
-ORDER BY p.created_at DESC
+ORDER BY p.created_at DESC, p.id DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -314,7 +336,7 @@ FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
     FROM posts
-    ORDER BY id DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT $2 OFFSET $1
 ) p
 JOIN users u ON p.user_id = u.id
@@ -325,7 +347,7 @@ LEFT JOIN LATERAL (
     ORDER BY sort_order ASC
     LIMIT 1
 ) pm ON true
-ORDER BY p.id DESC
+ORDER BY p.created_at DESC, p.id DESC
 `
 
 type ListPostsFeedParams struct {
@@ -379,6 +401,17 @@ func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const recalculatePostCommentCount = `-- name: RecalculatePostCommentCount :exec
+UPDATE posts
+SET comment_count = (SELECT COUNT(*)::bigint FROM comments WHERE post_id = $1)
+WHERE id = $1
+`
+
+func (q *Queries) RecalculatePostCommentCount(ctx context.Context, postID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, recalculatePostCommentCount, postID)
+	return err
 }
 
 const updatePost = `-- name: UpdatePost :one

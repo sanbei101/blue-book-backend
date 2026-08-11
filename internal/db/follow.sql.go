@@ -33,6 +33,28 @@ func (q *Queries) AddFollow(ctx context.Context, arg AddFollowParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const countFollowers = `-- name: CountFollowers :one
+SELECT COUNT(*)::bigint FROM follows WHERE following_id = $1
+`
+
+func (q *Queries) CountFollowers(ctx context.Context, followingID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countFollowers, followingID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countFollowing = `-- name: CountFollowing :one
+SELECT COUNT(*)::bigint FROM follows WHERE follower_id = $1
+`
+
+func (q *Queries) CountFollowing(ctx context.Context, followerID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countFollowing, followerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getFollowerCount = `-- name: GetFollowerCount :one
 SELECT COUNT(*)::bigint FROM follows WHERE following_id = $1
 `
@@ -80,7 +102,7 @@ SELECT
 FROM follows f
 JOIN users u ON f.follower_id = u.id
 WHERE f.following_id = $1
-ORDER BY f.created_at DESC
+ORDER BY f.created_at DESC, f.follower_id DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -128,7 +150,7 @@ SELECT
 FROM follows f
 JOIN users u ON f.following_id = u.id
 WHERE f.follower_id = $1
-ORDER BY f.created_at DESC
+ORDER BY f.created_at DESC, f.following_id DESC
 LIMIT $3 OFFSET $2
 `
 

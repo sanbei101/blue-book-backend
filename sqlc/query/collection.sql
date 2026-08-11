@@ -6,7 +6,11 @@ RETURNING *;
 -- name: ListCollectionFolders :many
 SELECT * FROM collection_folders
 WHERE user_id = @user_id
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, id DESC
+LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CountCollectionFolders :one
+SELECT COUNT(*)::bigint FROM collection_folders WHERE user_id = @user_id;
 
 -- name: GetCollectionFolderByID :one
 SELECT * FROM collection_folders
@@ -52,5 +56,8 @@ LEFT JOIN LATERAL (
     WHERE post_id = p.id ORDER BY sort_order ASC LIMIT 1
 ) pm ON true
 WHERE c.user_id = @user_id
-ORDER BY c.created_at DESC
+ORDER BY c.created_at DESC, c.post_id DESC
 LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CountCollections :one
+SELECT COUNT(*)::bigint FROM collections WHERE user_id = @user_id;

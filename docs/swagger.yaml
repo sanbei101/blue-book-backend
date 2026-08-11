@@ -26,6 +26,12 @@ components:
         username:
           description: 用户名
           type: string
+        viewer_following:
+          description: 当前用户是否已关注作者
+          type: boolean
+      required:
+      - id
+      - viewer_following
       type: object
     api.changePasswordRequest:
       properties:
@@ -47,46 +53,18 @@ components:
           description: 收藏夹 ID,可选
           type: string
       type: object
-    api.collectionItemResponse:
-      properties:
-        author:
-          $ref: '#/components/schemas/api.authorResponse'
-        collect_count:
-          description: 收藏数
-          type: integer
-        collected_at:
-          description: 收藏时间
-          type: string
-        comment_count:
-          description: 评论数
-          type: integer
-        content:
-          description: 内容
-          type: string
-        cover_url:
-          description: 封面 URL
-          type: string
-        id:
-          description: 帖子 ID
-          type: string
-        like_count:
-          description: 点赞数
-          type: integer
-        title:
-          description: 标题
-          type: string
-        view_count:
-          description: 浏览量
-          type: integer
-      type: object
     api.collectionStatusResponse:
       properties:
         collect_count:
           description: 收藏数量
+          minimum: 0
           type: integer
-        collected:
+        viewer_collected:
           description: 是否已收藏
           type: boolean
+      required:
+      - collect_count
+      - viewer_collected
       type: object
     api.commentResponse:
       properties:
@@ -107,6 +85,7 @@ components:
           type: string
         like_count:
           description: 点赞数
+          minimum: 0
           type: integer
         parent_id:
           description: 父评论 ID,顶级评论为 nil
@@ -117,6 +96,15 @@ components:
         user_id:
           description: 用户 ID
           type: string
+        viewer_liked:
+          description: 当前用户是否已点赞
+          type: boolean
+      required:
+      - id
+      - like_count
+      - post_id
+      - user_id
+      - viewer_liked
       type: object
     api.createCommentRequest:
       properties:
@@ -134,12 +122,6 @@ components:
       - content
       - post_id
       type: object
-    api.createCommentResponse:
-      properties:
-        id:
-          description: 评论 ID
-          type: string
-      type: object
     api.createFolderRequest:
       properties:
         name:
@@ -151,21 +133,21 @@ components:
       type: object
     api.createMediaItem:
       properties:
+        media_key:
+          description: 媒体对象 key
+          type: string
         media_type:
           description: 媒体类型 (image/video)
           enum:
           - image
           - video
           type: string
-        media_url:
-          description: 媒体对象 key
-          type: string
         sort_order:
           description: 排序序号
           type: integer
       required:
+      - media_key
       - media_type
-      - media_url
       type: object
     api.createPostRequest:
       properties:
@@ -211,6 +193,20 @@ components:
       required:
       - name
       type: object
+    api.deleteCommentResponse:
+      properties:
+        comment_count:
+          minimum: 0
+          type: integer
+        id:
+          type: string
+        post_id:
+          type: string
+      required:
+      - comment_count
+      - id
+      - post_id
+      type: object
     api.folderResponse:
       properties:
         created_at:
@@ -227,10 +223,14 @@ components:
       properties:
         follower_count:
           description: 该用户粉丝数
+          minimum: 0
           type: integer
-        following:
+        viewer_following:
           description: 是否已关注
           type: boolean
+      required:
+      - follower_count
+      - viewer_following
       type: object
     api.followUserResponse:
       properties:
@@ -246,6 +246,12 @@ components:
         username:
           description: 用户名
           type: string
+        viewer_following:
+          description: 当前用户是否已关注
+          type: boolean
+      required:
+      - id
+      - viewer_following
       type: object
     api.getPostsResponse:
       properties:
@@ -253,12 +259,11 @@ components:
           $ref: '#/components/schemas/api.authorResponse'
         collect_count:
           description: 收藏数
+          minimum: 0
           type: integer
-        collected:
-          description: 当前用户是否已收藏
-          type: boolean
         comment_count:
           description: 评论数
+          minimum: 0
           type: integer
         content:
           description: 内容
@@ -271,10 +276,8 @@ components:
           type: string
         like_count:
           description: 点赞数
+          minimum: 0
           type: integer
-        liked:
-          description: 当前用户是否已点赞
-          type: boolean
         media:
           description: 媒体列表
           items:
@@ -292,16 +295,35 @@ components:
           type: string
         view_count:
           description: 浏览量
+          minimum: 0
           type: integer
+        viewer_collected:
+          description: 当前用户是否已收藏
+          type: boolean
+        viewer_liked:
+          description: 当前用户是否已点赞
+          type: boolean
+      required:
+      - collect_count
+      - comment_count
+      - id
+      - like_count
+      - view_count
+      - viewer_collected
+      - viewer_liked
       type: object
     api.likeStatusResponse:
       properties:
         like_count:
           description: 点赞数量
+          minimum: 0
           type: integer
-        liked:
+        viewer_liked:
           description: 是否已点赞
           type: boolean
+      required:
+      - like_count
+      - viewer_liked
       type: object
     api.listPostsItemResponse:
       properties:
@@ -309,9 +331,11 @@ components:
           $ref: '#/components/schemas/api.authorResponse'
         collect_count:
           description: 收藏数
+          minimum: 0
           type: integer
         comment_count:
           description: 评论数
+          minimum: 0
           type: integer
         content:
           description: 内容
@@ -327,13 +351,29 @@ components:
           type: string
         like_count:
           description: 点赞数
+          minimum: 0
           type: integer
         title:
           description: 标题
           type: string
         view_count:
           description: 浏览量
+          minimum: 0
           type: integer
+        viewer_collected:
+          description: 当前用户是否已收藏
+          type: boolean
+        viewer_liked:
+          description: 当前用户是否已点赞
+          type: boolean
+      required:
+      - collect_count
+      - comment_count
+      - id
+      - like_count
+      - view_count
+      - viewer_collected
+      - viewer_liked
       type: object
     api.loginRequest:
       properties:
@@ -359,7 +399,7 @@ components:
           description: 媒体类型
           type: string
         media_url:
-          description: 媒体 URL
+          description: 媒体 CDN URL
           type: string
         sort_order:
           description: 排序序号
@@ -367,6 +407,182 @@ components:
         width:
           description: 图片宽度
           type: integer
+      type: object
+    api.pageResponse-api_commentResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.commentResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_folderResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.folderResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_followUserResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.followUserResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_listPostsItemResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.listPostsItemResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_searchHistoryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.searchHistoryResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_tagResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.tagResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_topicResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.topicResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      type: object
+    api.pageResponse-api_trendingSearchResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/api.trendingSearchResponse'
+          type: array
+          uniqueItems: false
+        page:
+          minimum: 1
+          type: integer
+        page_size:
+          minimum: 1
+          type: integer
+        total:
+          minimum: 0
+          type: integer
+      required:
+      - items
+      - page
+      - page_size
+      - total
       type: object
     api.presignMediaRequest:
       properties:
@@ -418,48 +634,14 @@ components:
         searched_at:
           type: string
       type: object
-    api.searchPostResponse:
-      properties:
-        author:
-          $ref: '#/components/schemas/api.authorResponse'
-        collect_count:
-          type: integer
-        comment_count:
-          type: integer
-        content:
-          type: string
-        cover_url:
-          type: string
-        created_at:
-          type: string
-        id:
-          type: string
-        like_count:
-          type: integer
-        relevance:
-          type: number
-        title:
-          type: string
-        view_count:
-          type: integer
-      type: object
     api.searchResponse:
       properties:
         posts:
-          items:
-            $ref: '#/components/schemas/api.searchPostResponse'
-          type: array
-          uniqueItems: false
+          $ref: '#/components/schemas/api.pageResponse-api_listPostsItemResponse'
         tags:
-          items:
-            $ref: '#/components/schemas/api.tagResponse'
-          type: array
-          uniqueItems: false
+          $ref: '#/components/schemas/api.pageResponse-api_tagResponse'
         users:
-          items:
-            $ref: '#/components/schemas/api.followUserResponse'
-          type: array
-          uniqueItems: false
+          $ref: '#/components/schemas/api.pageResponse-api_followUserResponse'
       type: object
     api.tagResponse:
       properties:
@@ -558,6 +740,41 @@ components:
       required:
       - username
       type: object
+    api.userProfileResponse:
+      properties:
+        avatar_url:
+          type: string
+        bio:
+          type: string
+        follower_count:
+          minimum: 0
+          type: integer
+        following_count:
+          minimum: 0
+          type: integer
+        id:
+          type: string
+        post_count:
+          minimum: 0
+          type: integer
+        received_like_and_collect_count:
+          minimum: 0
+          type: integer
+        username:
+          type: string
+        viewer_following:
+          type: boolean
+      required:
+      - avatar_url
+      - bio
+      - follower_count
+      - following_count
+      - id
+      - post_count
+      - received_like_and_collect_count
+      - username
+      - viewer_following
+      type: object
     api.userResponse:
       description: 用户信息
       properties:
@@ -592,12 +809,12 @@ components:
         msg:
           type: string
       type: object
-    render.Response-api_createCommentResponse:
+    render.Response-api_commentResponse:
       properties:
         code:
           type: integer
         data:
-          $ref: '#/components/schemas/api.createCommentResponse'
+          $ref: '#/components/schemas/api.commentResponse'
         msg:
           type: string
       type: object
@@ -607,6 +824,15 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/api.createPostResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_deleteCommentResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.deleteCommentResponse'
         msg:
           type: string
       type: object
@@ -646,6 +872,69 @@ components:
         msg:
           type: string
       type: object
+    render.Response-api_pageResponse-api_commentResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_commentResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_folderResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_folderResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_followUserResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_followUserResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_listPostsItemResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_listPostsItemResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_searchHistoryResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_searchHistoryResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_topicResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_topicResponse'
+        msg:
+          type: string
+      type: object
+    render.Response-api_pageResponse-api_trendingSearchResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.pageResponse-api_trendingSearchResponse'
+        msg:
+          type: string
+      type: object
     render.Response-api_presignMediaResponse:
       properties:
         code:
@@ -682,108 +971,21 @@ components:
         msg:
           type: string
       type: object
+    render.Response-api_userProfileResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.userProfileResponse'
+        msg:
+          type: string
+      type: object
     render.Response-api_userResponse:
       properties:
         code:
           type: integer
         data:
           $ref: '#/components/schemas/api.userResponse'
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_collectionItemResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.collectionItemResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_commentResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.commentResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_folderResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.folderResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_followUserResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.followUserResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_listPostsItemResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.listPostsItemResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_searchHistoryResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.searchHistoryResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_topicResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.topicResponse'
-          type: array
-          uniqueItems: false
-        msg:
-          type: string
-      type: object
-    render.Response-array_api_trendingSearchResponse:
-      properties:
-        code:
-          type: integer
-        data:
-          items:
-            $ref: '#/components/schemas/api.trendingSearchResponse'
-          type: array
-          uniqueItems: false
         msg:
           type: string
       type: object
@@ -1010,7 +1212,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-api_createCommentResponse'
+                $ref: '#/components/schemas/render.Response-api_commentResponse'
           description: OK
         "400":
           content:
@@ -1045,12 +1247,12 @@ paths:
         schema:
           type: string
       responses:
-        "204":
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.ResponseWithoutData'
-          description: No Content
+                $ref: '#/components/schemas/render.Response-api_deleteCommentResponse'
+          description: OK
         "400":
           content:
             application/json:
@@ -1171,7 +1373,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
           description: OK
         "500":
           content:
@@ -1202,7 +1404,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_collectionItemResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
           description: OK
         "500":
           content:
@@ -1217,12 +1419,25 @@ paths:
       - collections
   /me/collections/folders:
     get:
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        schema:
+          default: 1
+          type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        schema:
+          default: 20
+          type: integer
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_folderResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_folderResponse'
           description: OK
         "500":
           content:
@@ -1361,6 +1576,32 @@ paths:
       summary: 修改收藏夹
       tags:
       - collections
+  /me/profile:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.Response-api_userProfileResponse'
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.errorResponse'
+          description: Unauthorized
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.errorResponse'
+          description: Internal Server Error
+      security:
+      - BearerAuth: []
+      summary: 获取当前用户资料
+      tags:
+      - users
   /me/search-history:
     delete:
       responses:
@@ -1382,12 +1623,25 @@ paths:
       tags:
       - discovery
     get:
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        schema:
+          default: 1
+          type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        schema:
+          default: 20
+          type: integer
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_searchHistoryResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_searchHistoryResponse'
           description: OK
         "500":
           content:
@@ -1461,7 +1715,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
           description: OK
         "500":
           content:
@@ -1733,7 +1987,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_commentResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_commentResponse'
           description: OK
         "400":
           content:
@@ -1821,49 +2075,6 @@ paths:
       summary: 点赞帖子
       tags:
       - likes
-  /posts/user/{user_id}:
-    get:
-      parameters:
-      - description: 用户 ID
-        in: path
-        name: user_id
-        required: true
-        schema:
-          type: string
-      - description: 页码
-        in: query
-        name: page
-        schema:
-          default: 1
-          type: integer
-      - description: 每页数量
-        in: query
-        name: page_size
-        schema:
-          default: 20
-          type: integer
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/render.Response-array_api_listPostsItemResponse'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/render.errorResponse'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/render.errorResponse'
-          description: Internal Server Error
-      summary: 获取指定用户的帖子列表
-      tags:
-      - posts
   /search:
     get:
       parameters:
@@ -1946,18 +2157,24 @@ paths:
   /search/trending:
     get:
       parameters:
-      - description: 数量
+      - description: 页码
         in: query
-        name: limit
+        name: page
         schema:
-          default: 10
+          default: 1
+          type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        schema:
+          default: 20
           type: integer
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_trendingSearchResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_trendingSearchResponse'
           description: OK
         "500":
           content:
@@ -2066,7 +2283,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
           description: OK
         "400":
           content:
@@ -2109,7 +2326,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_topicResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_topicResponse'
           description: OK
         "500":
           content:
@@ -2183,7 +2400,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
           description: OK
         "400":
           content:
@@ -2220,7 +2437,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-api_userResponse'
+                $ref: '#/components/schemas/render.Response-api_userProfileResponse'
           description: OK
         "400":
           content:
@@ -2340,7 +2557,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_followUserResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_followUserResponse'
           description: OK
         "400":
           content:
@@ -2383,7 +2600,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-array_api_followUserResponse'
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_followUserResponse'
           description: OK
         "400":
           content:
@@ -2400,6 +2617,49 @@ paths:
       summary: 获取关注列表
       tags:
       - follows
+  /users/{user_id}/posts:
+    get:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+      - description: 页码
+        in: query
+        name: page
+        schema:
+          default: 1
+          type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        schema:
+          default: 20
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.errorResponse'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/render.errorResponse'
+          description: Internal Server Error
+      summary: 获取指定用户的帖子列表
+      tags:
+      - posts
   /users/profile:
     put:
       requestBody:

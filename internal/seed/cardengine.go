@@ -14,7 +14,7 @@ import (
 	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
-const cardEngineURL = "https://blue-card-render.sanbei.codes/proto.cardengine.v1.CardEngineService/CardsList"
+const cardEngineURL = "http://localhost:5174/proto.cardengine.v1.CardEngineService/CardsList"
 
 // 所有可用模板 ID
 var allTemplateIDs = []string{

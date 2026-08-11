@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/phuslu/log"
@@ -90,6 +91,18 @@ type userResponse struct {
 	Bio string `json:"bio,omitempty"`
 }
 
+type userProfileResponse struct {
+	ID                          uuid.UUID `json:"id"                              validate:"required"`
+	Username                    string    `json:"username"                        validate:"required"`
+	AvatarURL                   string    `json:"avatar_url"                      validate:"required"`
+	Bio                         string    `json:"bio"                             validate:"required"`
+	PostCount                   int64     `json:"post_count"                      validate:"required,min=0"`
+	FollowerCount               int64     `json:"follower_count"                  validate:"required,min=0"`
+	FollowingCount              int64     `json:"following_count"                 validate:"required,min=0"`
+	ReceivedLikeAndCollectCount int64     `json:"received_like_and_collect_count" validate:"required,min=0"`
+	ViewerFollowing             bool      `json:"viewer_following"                validate:"required"`
+}
+
 func toUserResponse(u *db.User) userResponse {
 	resp := userResponse{
 		ID:       u.ID,
@@ -102,6 +115,56 @@ func toUserResponse(u *db.User) userResponse {
 		resp.Bio = u.Bio.String
 	}
 	return resp
+}
+
+func (h *UserHandler) profileResponse(
+	ctx context.Context,
+	userID, viewerID uuid.UUID,
+) (userProfileResponse, error) {
+	user, err := h.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return userProfileResponse{}, err
+	}
+	postCount, err := h.store.CountPostsByUser(ctx, userID)
+	if err != nil {
+		return userProfileResponse{}, err
+	}
+	followerCount, err := h.store.GetFollowerCount(ctx, userID)
+	if err != nil {
+		return userProfileResponse{}, err
+	}
+	followingCount, err := h.store.GetFollowingCount(ctx, userID)
+	if err != nil {
+		return userProfileResponse{}, err
+	}
+	receivedCount, err := h.store.CountReceivedLikeAndCollectByUser(ctx, userID)
+	if err != nil {
+		return userProfileResponse{}, err
+	}
+	resp := userProfileResponse{
+		ID:                          user.ID,
+		Username:                    user.Username,
+		PostCount:                   postCount,
+		FollowerCount:               followerCount,
+		FollowingCount:              followingCount,
+		ReceivedLikeAndCollectCount: receivedCount,
+	}
+	if user.AvatarURL.Valid {
+		resp.AvatarURL = user.AvatarURL.String
+	}
+	if user.Bio.Valid {
+		resp.Bio = user.Bio.String
+	}
+	if viewerID != uuid.Nil {
+		resp.ViewerFollowing, err = h.store.IsFollowing(ctx, db.IsFollowingParams{
+			FollowerID:  viewerID,
+			FollowingID: userID,
+		})
+		if err != nil {
+			return userProfileResponse{}, err
+		}
+	}
+	return resp, nil
 }
 
 // 用户注册
@@ -370,7 +433,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 //	@Summary	获取用户资料
 //	@Tags		users
 //	@Param		user_id	path		string	true	"用户 ID"
-//	@Success	200		{object}	render.Response[userResponse]
+//	@Success	200		{object}	render.Response[userProfileResponse]
 //	@Failure	400		{object}	render.errorResponse
 //	@Failure	404		{object}	render.errorResponse
 //	@Router		/users/{user_id} [get]
@@ -382,13 +445,37 @@ func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.store.GetUserByID(r.Context(), userID)
+	profile, err := h.profileResponse(r.Context(), userID, jwt.GetUserIDFromContext(r))
 	if err != nil {
-		render.Error(w, http.StatusNotFound, "用户不存在")
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "用户不存在")
+			return
+		}
+		log.Error().Err(err).Msg("获取用户资料失败")
+		render.Error(w, http.StatusInternalServerError, "获取用户资料失败")
 		return
 	}
 
-	render.Success(w, "查询成功", toUserResponse(&user))
+	render.Success(w, "查询成功", profile)
+}
+
+// 获取当前用户资料
+//
+//	@Summary	获取当前用户资料
+//	@Tags		users
+//	@Security	BearerAuth
+//	@Success	200	{object}	render.Response[userProfileResponse]
+//	@Failure	401	{object}	render.errorResponse
+//	@Failure	500	{object}	render.errorResponse
+//	@Router		/me/profile [get]
+func (h *UserHandler) MyProfile(w http.ResponseWriter, r *http.Request) {
+	profile, err := h.profileResponse(r.Context(), jwt.GetUserIDFromContext(r), jwt.GetUserIDFromContext(r))
+	if err != nil {
+		log.Error().Err(err).Msg("获取当前用户资料失败")
+		render.Error(w, http.StatusInternalServerError, "获取用户资料失败")
+		return
+	}
+	render.Success(w, "查询成功", profile)
 }
 
 // ---- 更新资料 ----

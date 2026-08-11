@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -17,8 +18,24 @@ type Querier interface {
 	AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64, error)
 	AddPostTag(ctx context.Context, arg AddPostTagParams) (int64, error)
 	AddSearchHistory(ctx context.Context, arg AddSearchHistoryParams) error
+	CountCollectionFolders(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountCollections(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountCommentsByPostID(ctx context.Context, postID uuid.UUID) (int64, error)
+	CountFollowers(ctx context.Context, followingID uuid.UUID) (int64, error)
+	CountFollowing(ctx context.Context, followerID uuid.UUID) (int64, error)
+	CountPostsByUser(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountPostsFeed(ctx context.Context) (int64, error)
+	CountReceivedLikeAndCollectByUser(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountRecommendedPosts(ctx context.Context) (int64, error)
+	CountSearchHistory(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountSearchPosts(ctx context.Context, searchQuery string) (int64, error)
+	CountSearchTags(ctx context.Context, searchQuery pgtype.Text) (int64, error)
+	CountSearchUsers(ctx context.Context, searchQuery pgtype.Text) (int64, error)
 	CountTagPosts(ctx context.Context, tagID uuid.UUID) (int64, error)
 	CountTopicPosts(ctx context.Context, topicID uuid.UUID) (int64, error)
+	CountTopics(ctx context.Context) (int64, error)
+	CountTrendingSearches(ctx context.Context) (int64, error)
 	CreateCollectionFolder(ctx context.Context, arg CreateCollectionFolderParams) (CollectionFolder, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
@@ -57,7 +74,7 @@ type Querier interface {
 	IsCommentLiked(ctx context.Context, arg IsCommentLikedParams) (bool, error)
 	IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error)
 	IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool, error)
-	ListCollectionFolders(ctx context.Context, userID uuid.UUID) ([]CollectionFolder, error)
+	ListCollectionFolders(ctx context.Context, arg ListCollectionFoldersParams) ([]CollectionFolder, error)
 	ListCollections(ctx context.Context, arg ListCollectionsParams) ([]ListCollectionsRow, error)
 	ListCommentsByPostID(ctx context.Context, arg ListCommentsByPostIDParams) ([]ListCommentsByPostIDRow, error)
 	ListFollowers(ctx context.Context, arg ListFollowersParams) ([]ListFollowersRow, error)
@@ -70,7 +87,8 @@ type Querier interface {
 	ListTagsByPostID(ctx context.Context, postID uuid.UUID) ([]Tag, error)
 	ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) ([]ListTopicPostsRow, error)
 	ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error)
-	ListTrendingSearches(ctx context.Context, limitCount int32) ([]ListTrendingSearchesRow, error)
+	ListTrendingSearches(ctx context.Context, arg ListTrendingSearchesParams) ([]ListTrendingSearchesRow, error)
+	RecalculatePostCommentCount(ctx context.Context, postID uuid.UUID) error
 	RecordSearchTerm(ctx context.Context, keyword string) error
 	RemoveCollection(ctx context.Context, arg RemoveCollectionParams) (int64, error)
 	RemoveCommentLike(ctx context.Context, arg RemoveCommentLikeParams) (int64, error)

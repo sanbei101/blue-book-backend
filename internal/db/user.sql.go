@@ -13,6 +13,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countPostsByUser = `-- name: CountPostsByUser :one
+SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1
+`
+
+func (q *Queries) CountPostsByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPostsByUser, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countReceivedLikeAndCollectByUser = `-- name: CountReceivedLikeAndCollectByUser :one
+SELECT
+    ((SELECT COUNT(*)::bigint
+      FROM likes l
+      JOIN posts p ON p.id = l.target_id
+      WHERE p.user_id = $1 AND l.target_type = 1)
+     +
+     (SELECT COUNT(*)::bigint
+      FROM collections c
+      JOIN posts p ON p.id = c.post_id
+      WHERE p.user_id = $1))::bigint
+`
+
+func (q *Queries) CountReceivedLikeAndCollectByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countReceivedLikeAndCollectByUser, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO user_sessions (
     id, user_id, refresh_token_hash, expires_at

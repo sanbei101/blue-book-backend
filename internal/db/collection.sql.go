@@ -33,6 +33,28 @@ func (q *Queries) AddCollection(ctx context.Context, arg AddCollectionParams) (i
 	return result.RowsAffected(), nil
 }
 
+const countCollectionFolders = `-- name: CountCollectionFolders :one
+SELECT COUNT(*)::bigint FROM collection_folders WHERE user_id = $1
+`
+
+func (q *Queries) CountCollectionFolders(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCollectionFolders, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countCollections = `-- name: CountCollections :one
+SELECT COUNT(*)::bigint FROM collections WHERE user_id = $1
+`
+
+func (q *Queries) CountCollections(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCollections, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createCollectionFolder = `-- name: CreateCollectionFolder :one
 INSERT INTO collection_folders (id, user_id, name)
 VALUES ($1, $2, $3)
@@ -121,11 +143,18 @@ func (q *Queries) IsCollected(ctx context.Context, arg IsCollectedParams) (bool,
 const listCollectionFolders = `-- name: ListCollectionFolders :many
 SELECT id, user_id, name, created_at, updated_at FROM collection_folders
 WHERE user_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
+LIMIT $3 OFFSET $2
 `
 
-func (q *Queries) ListCollectionFolders(ctx context.Context, userID uuid.UUID) ([]CollectionFolder, error) {
-	rows, err := q.db.Query(ctx, listCollectionFolders, userID)
+type ListCollectionFoldersParams struct {
+	UserID      uuid.UUID `json:"user_id"`
+	OffsetCount int32     `json:"offset_count"`
+	LimitCount  int32     `json:"limit_count"`
+}
+
+func (q *Queries) ListCollectionFolders(ctx context.Context, arg ListCollectionFoldersParams) ([]CollectionFolder, error) {
+	rows, err := q.db.Query(ctx, listCollectionFolders, arg.UserID, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +194,7 @@ LEFT JOIN LATERAL (
     WHERE post_id = p.id ORDER BY sort_order ASC LIMIT 1
 ) pm ON true
 WHERE c.user_id = $1
-ORDER BY c.created_at DESC
+ORDER BY c.created_at DESC, c.post_id DESC
 LIMIT $3 OFFSET $2
 `
 

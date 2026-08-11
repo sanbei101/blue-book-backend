@@ -24,9 +24,9 @@ func NewFollowHandler(store *db.Store) *FollowHandler {
 
 type followStatusResponse struct {
 	// 是否已关注
-	Following bool `json:"following"`
+	ViewerFollowing bool `json:"viewer_following" validate:"required"`
 	// 该用户粉丝数
-	FollowerCount int64 `json:"follower_count"`
+	FollowerCount int64 `json:"follower_count" validate:"required,min=0"`
 }
 
 // 关注用户
@@ -75,7 +75,7 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = followStatusResponse{Following: following, FollowerCount: followerCount}
+		resp = followStatusResponse{ViewerFollowing: following, FollowerCount: followerCount}
 		return nil
 	})
 	if err != nil {
@@ -131,7 +131,7 @@ func (h *FollowHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = followStatusResponse{Following: following, FollowerCount: followerCount}
+		resp = followStatusResponse{ViewerFollowing: following, FollowerCount: followerCount}
 		return nil
 	})
 	if err != nil {
@@ -150,13 +150,15 @@ func (h *FollowHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
 
 type followUserResponse struct {
 	// 用户 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 用户名
 	Username string `json:"username"`
 	// 头像地址
 	AvatarURL string `json:"avatar_url,omitempty"`
 	// 个人简介
 	Bio string `json:"bio,omitempty"`
+	// 当前用户是否已关注
+	ViewerFollowing bool `json:"viewer_following" validate:"required"`
 }
 
 func newFollowUserResponse(
@@ -184,7 +186,7 @@ func newFollowUserResponse(
 //	@Param		user_id		path		string	true	"用户 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]followUserResponse]
+//	@Success	200			{object}	render.Response[pageResponse[followUserResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/users/{user_id}/followers [get]
@@ -207,18 +209,35 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取粉丝列表失败")
 		return
 	}
+	total, err := h.store.CountFollowers(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计粉丝列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取粉丝列表失败")
+		return
+	}
 
 	users := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		users = append(users, newFollowUserResponse(
+		user := newFollowUserResponse(
 			rows[i].ID,
 			rows[i].Username,
 			rows[i].AvatarURL,
 			rows[i].Bio,
-		))
+		)
+		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
+			user.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
+				FollowerID: viewerID, FollowingID: user.ID,
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("获取粉丝查看者状态失败")
+				render.Error(w, http.StatusInternalServerError, "获取粉丝列表失败")
+				return
+			}
+		}
+		users = append(users, user)
 	}
 
-	render.Success(w, "查询成功", users)
+	render.Success(w, "查询成功", newPageResponse(users, offset, pageSize, total))
 }
 
 // 获取关注列表
@@ -228,7 +247,7 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 //	@Param		user_id		path		string	true	"用户 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]followUserResponse]
+//	@Success	200			{object}	render.Response[pageResponse[followUserResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/users/{user_id}/following [get]
@@ -251,17 +270,33 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取关注列表失败")
 		return
 	}
+	total, err := h.store.CountFollowing(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计关注列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取关注列表失败")
+		return
+	}
 
 	users := make([]followUserResponse, 0, len(rows))
 	for i := range rows {
-		users = append(users, newFollowUserResponse(
+		user := newFollowUserResponse(
 			rows[i].ID,
 			rows[i].Username,
 			rows[i].AvatarURL,
 			rows[i].Bio,
-		))
+		)
+		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
+			user.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
+				FollowerID: viewerID, FollowingID: user.ID,
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("获取关注查看者状态失败")
+				render.Error(w, http.StatusInternalServerError, "获取关注列表失败")
+				return
+			}
+		}
+		users = append(users, user)
 	}
-	// TODO: 返回互关状态
 
-	render.Success(w, "查询成功", users)
+	render.Success(w, "查询成功", newPageResponse(users, offset, pageSize, total))
 }

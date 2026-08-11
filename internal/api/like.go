@@ -24,9 +24,9 @@ func NewLikeHandler(store *db.Store) *LikeHandler {
 
 type likeStatusResponse struct {
 	// 是否已点赞
-	Liked bool `json:"liked"`
+	ViewerLiked bool `json:"viewer_liked" validate:"required"`
 	// 点赞数量
-	LikeCount int64 `json:"like_count"`
+	LikeCount int64 `json:"like_count" validate:"required,min=0"`
 }
 
 func parseUUIDParam(r *http.Request, name string) (uuid.UUID, bool) {
@@ -59,7 +59,7 @@ func (h *LikeHandler) likePostTx(r *http.Request, q *db.Queries, userID, postID 
 	if err != nil {
 		return likeStatusResponse{}, err
 	}
-	return likeStatusResponse{Liked: liked, LikeCount: post.LikeCount}, nil
+	return likeStatusResponse{ViewerLiked: liked, LikeCount: post.LikeCount}, nil
 }
 
 // 点赞帖子
@@ -136,7 +136,7 @@ func (h *LikeHandler) UnlikePost(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = likeStatusResponse{Liked: liked, LikeCount: post.LikeCount}
+		resp = likeStatusResponse{ViewerLiked: liked, LikeCount: post.LikeCount}
 		return nil
 	})
 	if err != nil {
@@ -189,7 +189,11 @@ func (h *LikeHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = likeStatusResponse{Liked: true, LikeCount: int64(comment.LikeCount)}
+		liked, err := q.IsCommentLiked(r.Context(), db.IsCommentLikedParams{UserID: userID, CommentID: commentID})
+		if err != nil {
+			return err
+		}
+		resp = likeStatusResponse{ViewerLiked: liked, LikeCount: int64(comment.LikeCount)}
 		return nil
 	})
 	if err != nil {
@@ -237,7 +241,11 @@ func (h *LikeHandler) UnlikeComment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = likeStatusResponse{Liked: false, LikeCount: int64(comment.LikeCount)}
+		liked, err := q.IsCommentLiked(r.Context(), db.IsCommentLikedParams{UserID: userID, CommentID: commentID})
+		if err != nil {
+			return err
+		}
+		resp = likeStatusResponse{ViewerLiked: liked, LikeCount: int64(comment.LikeCount)}
 		return nil
 	})
 	if err != nil {

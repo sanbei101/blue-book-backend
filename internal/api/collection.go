@@ -25,9 +25,9 @@ func NewCollectionHandler(store *db.Store) *CollectionHandler {
 
 type collectionStatusResponse struct {
 	// 是否已收藏
-	Collected bool `json:"collected"`
+	ViewerCollected bool `json:"viewer_collected" validate:"required"`
 	// 收藏数量
-	CollectCount int64 `json:"collect_count"`
+	CollectCount int64 `json:"collect_count" validate:"required,min=0"`
 }
 
 // 收藏帖子
@@ -93,7 +93,7 @@ func (h *CollectionHandler) Collect(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = collectionStatusResponse{Collected: collected, CollectCount: post.CollectCount}
+		resp = collectionStatusResponse{ViewerCollected: collected, CollectCount: post.CollectCount}
 		return nil
 	})
 	if err != nil {
@@ -157,7 +157,7 @@ func (h *CollectionHandler) Uncollect(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		resp = collectionStatusResponse{Collected: collected, CollectCount: post.CollectCount}
+		resp = collectionStatusResponse{ViewerCollected: collected, CollectCount: post.CollectCount}
 		return nil
 	})
 	if err != nil {
@@ -172,29 +172,6 @@ func (h *CollectionHandler) Uncollect(w http.ResponseWriter, r *http.Request) {
 	render.Success(w, "取消收藏成功", resp)
 }
 
-type collectionItemResponse struct {
-	// 帖子 ID
-	ID uuid.UUID `json:"id"`
-	// 标题
-	Title string `json:"title"`
-	// 内容
-	Content string `json:"content"`
-	// 浏览量
-	ViewCount int64 `json:"view_count"`
-	// 点赞数
-	LikeCount int64 `json:"like_count"`
-	// 收藏数
-	CollectCount int64 `json:"collect_count"`
-	// 评论数
-	CommentCount int64 `json:"comment_count"`
-	// 作者信息
-	Author authorResponse `json:"author"`
-	// 封面 URL
-	CoverURL string `json:"cover_url,omitempty"`
-	// 收藏时间
-	CollectedAt time.Time `json:"collected_at"`
-}
-
 // 获取我的收藏列表
 //
 //	@Summary	获取我的收藏列表
@@ -202,7 +179,7 @@ type collectionItemResponse struct {
 //	@Security	BearerAuth
 //	@Param		page		query		int	false	"页码"	default(1)
 //	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]collectionItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/me/collections [get]
 func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -219,10 +196,16 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取收藏列表失败")
 		return
 	}
+	total, err := h.store.CountCollections(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计收藏列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取收藏列表失败")
+		return
+	}
 
-	items := make([]collectionItemResponse, 0, len(rows))
+	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, collectionItemResponse{
+		item := listPostsItemResponse{
 			ID:           rows[i].ID,
 			Title:        rows[i].Title,
 			Content:      rows[i].Content,
@@ -230,12 +213,20 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 			LikeCount:    rows[i].LikeCount,
 			CollectCount: rows[i].CollectCount,
 			CommentCount: rows[i].CommentCount,
-			CollectedAt:  rows[i].CollectedAt,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
-		})
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, userID, item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取收藏帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取收藏列表失败")
+			return
+		}
+		items = append(items, item)
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 type folderResponse struct {
@@ -260,14 +251,27 @@ func toFolderResponse(f *db.CollectionFolder) folderResponse {
 //	@Summary	获取收藏夹列表
 //	@Tags		collections
 //	@Security	BearerAuth
-//	@Success	200	{object}	render.Response[[]folderResponse]
-//	@Failure	500	{object}	render.errorResponse
+//	@Param		page		query		int	false	"页码"	default(1)
+//	@Param		page_size	query		int	false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[folderResponse]]
+//	@Failure	500			{object}	render.errorResponse
 //	@Router		/me/collections/folders [get]
 func (h *CollectionHandler) ListFolders(w http.ResponseWriter, r *http.Request) {
 	userID := jwt.GetUserIDFromContext(r)
-	folders, err := h.store.ListCollectionFolders(r.Context(), userID)
+	offset, pageSize := Pagination(r, 1, 20, 50)
+	folders, err := h.store.ListCollectionFolders(r.Context(), db.ListCollectionFoldersParams{
+		UserID:      userID,
+		OffsetCount: int32(offset),
+		LimitCount:  int32(pageSize),
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("获取收藏夹列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取收藏夹列表失败")
+		return
+	}
+	total, err := h.store.CountCollectionFolders(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计收藏夹列表失败")
 		render.Error(w, http.StatusInternalServerError, "获取收藏夹列表失败")
 		return
 	}
@@ -275,7 +279,7 @@ func (h *CollectionHandler) ListFolders(w http.ResponseWriter, r *http.Request) 
 	for i := range folders {
 		items = append(items, toFolderResponse(&folders[i]))
 	}
-	render.Success(w, "查询成功", items)
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 type createFolderRequest struct {

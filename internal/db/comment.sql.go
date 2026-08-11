@@ -13,6 +13,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countCommentsByPostID = `-- name: CountCommentsByPostID :one
+SELECT COUNT(*)::bigint FROM comments WHERE post_id = $1
+`
+
+func (q *Queries) CountCommentsByPostID(ctx context.Context, postID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCommentsByPostID, postID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createComment = `-- name: CreateComment :one
 INSERT INTO comments (
     id, post_id, user_id, parent_id, content
@@ -111,7 +122,7 @@ SELECT
 FROM comments c
 JOIN users u ON c.user_id = u.id
 WHERE c.post_id = $1
-ORDER BY c.created_at ASC
+ORDER BY c.created_at ASC, c.id ASC
 LIMIT $3 OFFSET $2
 `
 

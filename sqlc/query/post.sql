@@ -22,7 +22,7 @@ FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
     FROM posts
-    ORDER BY id DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT @limit_count OFFSET @offset_count
 ) p
 JOIN users u ON p.user_id = u.id
@@ -33,7 +33,10 @@ LEFT JOIN LATERAL (
     ORDER BY sort_order ASC
     LIMIT 1
 ) pm ON true
-ORDER BY p.id DESC;
+ORDER BY p.created_at DESC, p.id DESC;
+
+-- name: CountPostsFeed :one
+SELECT COUNT(*)::bigint FROM posts;
 
 -- name: GetPostByID :one
 SELECT
@@ -60,8 +63,11 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE p.user_id = @user_id
-ORDER BY p.created_at DESC
+ORDER BY p.created_at DESC, p.id DESC
 LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CountPostsByUserID :one
+SELECT COUNT(*)::bigint FROM posts WHERE user_id = @user_id;
 
 -- name: GetPostMediaByPostID :many
 SELECT id, post_id, media_key, media_type, width, height, sort_order, created_at
@@ -92,6 +98,11 @@ UPDATE posts SET comment_count = comment_count + 1 WHERE id = @id;
 
 -- name: DecrementPostCommentCount :exec
 UPDATE posts SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = @id;
+
+-- name: RecalculatePostCommentCount :exec
+UPDATE posts
+SET comment_count = (SELECT COUNT(*)::bigint FROM comments WHERE post_id = @post_id)
+WHERE id = @post_id;
 
 -- name: IncrementPostCollectCount :exec
 UPDATE posts SET collect_count = collect_count + 1 WHERE id = @id;

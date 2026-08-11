@@ -70,25 +70,41 @@ type createPostResponse struct {
 	ID uuid.UUID `json:"id"`
 }
 
+type pageResponse[T any] struct {
+	Items    []T   `json:"items"     validate:"required"`
+	Page     int   `json:"page"      validate:"required,min=1"`
+	PageSize int   `json:"page_size" validate:"required,min=1"`
+	Total    int64 `json:"total"     validate:"required,min=0"`
+}
+
+func newPageResponse[T any](items []T, offset, pageSize int, total int64) pageResponse[T] {
+	return pageResponse[T]{
+		Items:    items,
+		Page:     offset/pageSize + 1,
+		PageSize: pageSize,
+		Total:    total,
+	}
+}
+
 type getPostsResponse struct {
 	// 帖子 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 标题
 	Title string `json:"title"`
 	// 内容
 	Content string `json:"content"`
 	// 浏览量
-	ViewCount int64 `json:"view_count"`
+	ViewCount int64 `json:"view_count" validate:"required,min=0"`
 	// 点赞数
-	LikeCount int64 `json:"like_count"`
+	LikeCount int64 `json:"like_count" validate:"required,min=0"`
 	// 收藏数
-	CollectCount int64 `json:"collect_count"`
+	CollectCount int64 `json:"collect_count" validate:"required,min=0"`
 	// 评论数
-	CommentCount int64 `json:"comment_count"`
+	CommentCount int64 `json:"comment_count" validate:"required,min=0"`
 	// 当前用户是否已点赞
-	Liked bool `json:"liked"`
+	ViewerLiked bool `json:"viewer_liked" validate:"required"`
 	// 当前用户是否已收藏
-	Collected bool `json:"collected"`
+	ViewerCollected bool `json:"viewer_collected" validate:"required"`
 	// 标签列表
 	Tags []tagResponse `json:"tags,omitempty"`
 	// 作者信息
@@ -101,19 +117,23 @@ type getPostsResponse struct {
 
 type listPostsItemResponse struct {
 	// 帖子 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 标题
 	Title string `json:"title"`
 	// 内容
 	Content string `json:"content"`
 	// 浏览量
-	ViewCount int64 `json:"view_count"`
+	ViewCount int64 `json:"view_count" validate:"required,min=0"`
 	// 点赞数
-	LikeCount int64 `json:"like_count"`
+	LikeCount int64 `json:"like_count" validate:"required,min=0"`
 	// 收藏数
-	CollectCount int64 `json:"collect_count"`
+	CollectCount int64 `json:"collect_count" validate:"required,min=0"`
 	// 评论数
-	CommentCount int64 `json:"comment_count"`
+	CommentCount int64 `json:"comment_count" validate:"required,min=0"`
+	// 当前用户是否已点赞
+	ViewerLiked bool `json:"viewer_liked" validate:"required"`
+	// 当前用户是否已收藏
+	ViewerCollected bool `json:"viewer_collected" validate:"required"`
 	// 作者信息
 	Author authorResponse `json:"author"`
 	// 封面 URL
@@ -124,11 +144,13 @@ type listPostsItemResponse struct {
 
 type authorResponse struct {
 	// 用户 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 用户名
 	Username string `json:"username"`
 	// 头像地址
 	AvatarURL string `json:"avatar_url,omitempty"`
+	// 当前用户是否已关注作者
+	ViewerFollowing bool `json:"viewer_following" validate:"required"`
 }
 
 type mediaResponse struct {
@@ -152,6 +174,29 @@ func toAuthorFromFeed(authorID uuid.UUID, authorUsername string, authorAvatar pg
 		a.AvatarURL = authorAvatar.String
 	}
 	return a
+}
+
+func viewerPostStates(
+	ctx context.Context,
+	store *db.Store,
+	viewerID, postID, authorID uuid.UUID,
+) (liked, collected, following bool, err error) {
+	if viewerID == uuid.Nil {
+		return false, false, false, nil
+	}
+	liked, err = store.IsPostLiked(ctx, db.IsPostLikedParams{UserID: viewerID, PostID: postID})
+	if err != nil {
+		return false, false, false, err
+	}
+	collected, err = store.IsCollected(ctx, db.IsCollectedParams{UserID: viewerID, PostID: postID})
+	if err != nil {
+		return false, false, false, err
+	}
+	following, err = store.IsFollowing(ctx, db.IsFollowingParams{FollowerID: viewerID, FollowingID: authorID})
+	if err != nil {
+		return false, false, false, err
+	}
+	return liked, collected, following, nil
 }
 
 func toMediaResponse(m *db.PostMedium) mediaResponse {
@@ -318,7 +363,7 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 //	@Tags		posts
 //	@Param		page		query		int	false	"页码"	default(1)
 //	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]listPostsItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/posts [get]
 func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
@@ -331,10 +376,16 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取信息流失败")
 		return
 	}
+	total, err := h.store.CountPostsFeed(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("统计信息流失败")
+		render.Error(w, http.StatusInternalServerError, "获取信息流失败")
+		return
+	}
 
 	posts := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		posts = append(posts, listPostsItemResponse{
+		post := listPostsItemResponse{
 			ID:           rows[i].ID,
 			Title:        rows[i].Title,
 			Content:      rows[i].Content,
@@ -345,10 +396,19 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:    rows[i].CreatedAt,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
-		})
+		}
+		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), post.ID, post.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取信息流失败")
+			return
+		}
+		posts = append(posts, post)
 	}
 
-	render.Success(w, "查询成功", posts)
+	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
 }
 
 // 获取帖子详情
@@ -418,23 +478,13 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		Tags:         tagList,
 	}
 
-	if currentUserID := jwt.GetUserIDFromContext(r); currentUserID != uuid.Nil {
-		liked, err := h.store.IsPostLiked(r.Context(), db.IsPostLikedParams{
-			UserID: currentUserID,
-			PostID: row.ID,
-		})
-		if err != nil {
-			log.Error().Err(err).Msg("获取点赞状态失败")
-		}
-		collected, err := h.store.IsCollected(r.Context(), db.IsCollectedParams{
-			UserID: currentUserID,
-			PostID: row.ID,
-		})
-		if err != nil {
-			log.Error().Err(err).Msg("获取收藏状态失败")
-		}
-		resp.Liked = liked
-		resp.Collected = collected
+	resp.ViewerLiked, resp.ViewerCollected, resp.Author.ViewerFollowing, err = viewerPostStates(
+		r.Context(), h.store, jwt.GetUserIDFromContext(r), row.ID, row.AuthorID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("获取帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取帖子失败")
+		return
 	}
 
 	render.Success(w, "查询成功", resp)
@@ -447,15 +497,21 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //	@Param		user_id		path		string	true	"用户 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]listPostsItemResponse]
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
-//	@Router		/posts/user/{user_id} [get]
+//	@Router		/users/{user_id}/posts [get]
 func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
+		return
+	}
+	total, err := h.store.CountPostsByUserID(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计用户帖子失败")
+		render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
 		return
 	}
 	offset, pageSize := Pagination(r, 1, 20, 50)
@@ -471,7 +527,7 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 
 	posts := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
-		posts = append(posts, listPostsItemResponse{
+		post := listPostsItemResponse{
 			ID:           rows[i].ID,
 			Title:        rows[i].Title,
 			Content:      rows[i].Content,
@@ -482,10 +538,19 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:    rows[i].CreatedAt,
 			CoverURL:     media.CDNURL(rows[i].CoverKey),
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
-		})
+		}
+		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, jwt.GetUserIDFromContext(r), post.ID, post.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
+			return
+		}
+		posts = append(posts, post)
 	}
 
-	render.Success(w, "查询成功", posts)
+	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
 }
 
 // 删除帖子

@@ -35,18 +35,13 @@ type createCommentRequest struct {
 	Content string `json:"content" validate:"required,max=1000"`
 }
 
-type createCommentResponse struct {
-	// 评论 ID
-	ID uuid.UUID `json:"id"`
-}
-
 // 创建评论
 //
 //	@Summary	创建评论
 //	@Tags		comments
 //	@Security	BearerAuth
 //	@Param		body	body		createCommentRequest	true	"评论内容"
-//	@Success	200		{object}	render.Response[createCommentResponse]
+//	@Success	200		{object}	render.Response[commentResponse]
 //	@Failure	400		{object}	render.errorResponse
 //	@Failure	404		{object}	render.errorResponse
 //	@Failure	500		{object}	render.errorResponse
@@ -98,7 +93,32 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.Success(w, "评论成功", createCommentResponse{ID: comment.ID})
+	user, err := h.store.GetUserByID(r.Context(), currentUserID)
+	if err != nil {
+		log.Error().Err(err).Msg("获取评论作者失败")
+		render.Error(w, http.StatusInternalServerError, "创建评论失败")
+		return
+	}
+	resp := commentResponse{
+		ID:             comment.ID,
+		PostID:         comment.PostID,
+		UserID:         comment.UserID,
+		ParentID:       comment.ParentID,
+		Content:        comment.Content,
+		LikeCount:      comment.LikeCount,
+		AuthorUsername: user.Username,
+		CreatedAt:      comment.CreatedAt,
+	}
+	if user.AvatarURL.Valid {
+		resp.AuthorAvatar = user.AvatarURL.String
+	}
+	render.Success(w, "评论成功", resp)
+}
+
+type deleteCommentResponse struct {
+	ID           uuid.UUID `json:"id"            validate:"required"`
+	PostID       uuid.UUID `json:"post_id"       validate:"required"`
+	CommentCount int64     `json:"comment_count" validate:"required,min=0"`
 }
 
 // 删除评论
@@ -107,7 +127,7 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 //	@Tags		comments
 //	@Security	BearerAuth
 //	@Param		comment_id	path		string	true	"评论 ID"
-//	@Success	204			{object}	render.ResponseWithoutData
+//	@Success	200			{object}	render.Response[deleteCommentResponse]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	403			{object}	render.errorResponse
 //	@Failure	404			{object}	render.errorResponse
@@ -136,6 +156,7 @@ func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var resp deleteCommentResponse
 	err = h.store.ExecTx(r.Context(), func(q *db.Queries) error {
 		rows, err := q.DeleteComment(r.Context(), db.DeleteCommentParams{
 			ID:     commentID,
@@ -147,7 +168,15 @@ func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		if rows == 0 {
 			return pgx.ErrNoRows
 		}
-		return q.DecrementPostCommentCount(r.Context(), comment.PostID)
+		if err := q.RecalculatePostCommentCount(r.Context(), comment.PostID); err != nil {
+			return err
+		}
+		post, err := q.GetPostByID(r.Context(), comment.PostID)
+		if err != nil {
+			return err
+		}
+		resp = deleteCommentResponse{ID: commentID, PostID: comment.PostID, CommentCount: post.CommentCount}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -159,24 +188,26 @@ func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render.SuccessNoData(w, "删除成功")
+	render.Success(w, "删除成功", resp)
 }
 
 // ---- 帖子评论列表 ----
 
 type commentResponse struct {
 	// 评论 ID
-	ID uuid.UUID `json:"id"`
+	ID uuid.UUID `json:"id" validate:"required"`
 	// 帖子 ID
-	PostID uuid.UUID `json:"post_id"`
+	PostID uuid.UUID `json:"post_id" validate:"required"`
 	// 用户 ID
-	UserID uuid.UUID `json:"user_id"`
+	UserID uuid.UUID `json:"user_id" validate:"required"`
 	// 父评论 ID,顶级评论为 nil
 	ParentID *uuid.UUID `json:"parent_id,omitempty"`
 	// 评论内容
 	Content string `json:"content"`
 	// 点赞数
-	LikeCount int32 `json:"like_count"`
+	LikeCount int32 `json:"like_count" validate:"required,min=0"`
+	// 当前用户是否已点赞
+	ViewerLiked bool `json:"viewer_liked" validate:"required"`
 	// 作者用户名
 	AuthorUsername string `json:"author_username"`
 	// 作者头像地址
@@ -192,7 +223,7 @@ type commentResponse struct {
 //	@Param		post_id		path		string	true	"帖子 ID"
 //	@Param		page		query		int		false	"页码"	default(1)
 //	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[[]commentResponse]
+//	@Success	200			{object}	render.Response[pageResponse[commentResponse]]
 //	@Failure	400			{object}	render.errorResponse
 //	@Failure	500			{object}	render.errorResponse
 //	@Router		/posts/{post_id}/comments [get]
@@ -215,6 +246,12 @@ func (h *CommentHandler) ListByPost(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusInternalServerError, "获取评论列表失败")
 		return
 	}
+	total, err := h.store.CountCommentsByPostID(r.Context(), postID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计评论列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取评论列表失败")
+		return
+	}
 
 	comments := make([]commentResponse, 0, len(rows))
 	for i := range rows {
@@ -233,8 +270,18 @@ func (h *CommentHandler) ListByPost(w http.ResponseWriter, r *http.Request) {
 		if rows[i].AuthorAvatar.Valid {
 			c.AuthorAvatar = rows[i].AuthorAvatar.String
 		}
+		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
+			c.ViewerLiked, err = h.store.IsCommentLiked(r.Context(), db.IsCommentLikedParams{
+				UserID: viewerID, CommentID: c.ID,
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("获取评论查看者状态失败")
+				render.Error(w, http.StatusInternalServerError, "获取评论列表失败")
+				return
+			}
+		}
 		comments = append(comments, c)
 	}
 
-	render.Success(w, "查询成功", comments)
+	render.Success(w, "查询成功", newPageResponse(comments, offset, pageSize, total))
 }
