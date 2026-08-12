@@ -55,6 +55,17 @@ func (ns NullMediaTypeEnum) Value() (driver.Value, error) {
 	return string(ns.MediaTypeEnum), nil
 }
 
+type ApiKey struct {
+	ID         uuid.UUID          `json:"id"`
+	UserID     uuid.UUID          `json:"user_id"`
+	Name       string             `json:"name"`
+	KeyPrefix  string             `json:"key_prefix"`
+	KeyHash    string             `json:"key_hash"`
+	CreatedAt  time.Time          `json:"created_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type Collection struct {
 	UserID    uuid.UUID  `json:"user_id"`
 	PostID    uuid.UUID  `json:"post_id"`

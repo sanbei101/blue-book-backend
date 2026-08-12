@@ -13,7 +13,9 @@ import (
 
 	"github.com/cristalhq/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
@@ -80,12 +82,34 @@ func GenerateRefreshToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
+const apiKeyPrefix = "bbk_"
+
+// GenerateAPIKey returns a long-lived credential whose plaintext is only safe to show once.
+func GenerateAPIKey() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return apiKeyPrefix + base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func HashAPIKey(key string) string {
+	hash := sha256.Sum256([]byte(key))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
+func IsAPIKey(key string) bool {
+	return strings.HasPrefix(key, apiKeyPrefix)
+}
+
 func HashRefreshToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
-func AuthMiddleware(next http.Handler) http.Handler {
+// JWTAuthMiddleware only accepts short-lived access tokens. Use it for account
+// security operations that a delegated API key must not perform.
+func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if jwtVerifier == nil {
 			render.Error(w, http.StatusInternalServerError, "认证服务未配置")
@@ -128,34 +152,84 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func authenticateAPIKey(r *http.Request, store *db.Store) (uuid.UUID, bool, error) {
+	auth := r.Header.Get("Authorization")
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" || !IsAPIKey(parts[1]) {
+		return uuid.Nil, false, nil
+	}
+	key, err := store.GetActiveAPIKeyByHash(r.Context(), HashAPIKey(parts[1]))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, false, nil
+		}
+		return uuid.Nil, false, err
+	}
+	if err := store.TouchAPIKey(r.Context(), key.ID); err != nil {
+		return uuid.Nil, false, err
+	}
+	return key.UserID, true, nil
+}
+
+// AuthMiddleware accepts either a short-lived JWT or a user's delegated API key.
+func AuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID, ok, err := authenticateAPIKey(r, store)
+			if err != nil {
+				render.Error(w, http.StatusInternalServerError, "API Key 验证失败")
+				return
+			}
+			if ok {
+				ctx := context.WithValue(r.Context(), userIDKey, userID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			JWTAuthMiddleware(next).ServeHTTP(w, r)
+		})
+	}
+}
+
 // OptionalAuthMiddleware 在凭证有效时注入用户 ID,凭证缺失或无效时继续访问公开接口。
-func OptionalAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if jwtVerifier == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			next.ServeHTTP(w, r)
-			return
-		}
+func OptionalAuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID, ok, err := authenticateAPIKey(r, store)
+			if err != nil {
+				render.Error(w, http.StatusInternalServerError, "API Key 验证失败")
+				return
+			}
+			if ok {
+				ctx := context.WithValue(r.Context(), userIDKey, userID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			if jwtVerifier == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				next.ServeHTTP(w, r)
+				return
+			}
 
-		token, err := jwt.Parse([]byte(parts[1]), jwtVerifier)
-		if err != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		var claims userClaims
-		if err := json.Unmarshal(token.Claims(), &claims); err != nil ||
-			claims.UserID == uuid.Nil || !claims.IsValidAt(time.Now()) {
-			next.ServeHTTP(w, r)
-			return
-		}
+			token, err := jwt.Parse([]byte(parts[1]), jwtVerifier)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			var claims userClaims
+			if err := json.Unmarshal(token.Claims(), &claims); err != nil ||
+				claims.UserID == uuid.Nil || !claims.IsValidAt(time.Now()) {
+				next.ServeHTTP(w, r)
+				return
+			}
 
-		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 func GetUserIDFromContext(r *http.Request) uuid.UUID {

@@ -22,6 +22,19 @@ CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id, created_at DESC
 CREATE INDEX idx_user_sessions_active ON user_sessions(refresh_token_hash, expires_at)
     WHERE revoked_at IS NULL;
 
+CREATE TABLE api_keys (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
+    key_hash VARCHAR(64) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX idx_api_keys_user_id ON api_keys(user_id, created_at DESC);
+CREATE INDEX idx_api_keys_active ON api_keys(key_hash) WHERE revoked_at IS NULL;
+
 CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -152,3 +165,17 @@ CREATE TABLE follows (
     PRIMARY KEY (follower_id, following_id)
 );
 CREATE INDEX idx_follows_following_id ON follows(following_id);
+
+CREATE TABLE api_keys (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
+    key_hash VARCHAR(64) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_api_keys_user_id ON api_keys(user_id, created_at DESC);
+CREATE INDEX idx_api_keys_active ON api_keys(key_hash) WHERE revoked_at IS NULL;

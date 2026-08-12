@@ -36,6 +36,7 @@ type Querier interface {
 	CountTopicPosts(ctx context.Context, topicID uuid.UUID) (int64, error)
 	CountTopics(ctx context.Context) (int64, error)
 	CountTrendingSearches(ctx context.Context) (int64, error)
+	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateCollectionFolder(ctx context.Context, arg CreateCollectionFolderParams) (CollectionFolder, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
@@ -53,6 +54,7 @@ type Querier interface {
 	DeletePostMediaByPostID(ctx context.Context, postID uuid.UUID) error
 	DeletePostTags(ctx context.Context, postID uuid.UUID) error
 	DeleteSearchHistory(ctx context.Context, userID uuid.UUID) error
+	GetActiveAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetActiveSessionByTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error)
 	GetCollectionFolderByID(ctx context.Context, arg GetCollectionFolderByIDParams) (CollectionFolder, error)
 	GetCommentByID(ctx context.Context, id uuid.UUID) (Comment, error)
@@ -74,6 +76,7 @@ type Querier interface {
 	IsCommentLiked(ctx context.Context, arg IsCommentLikedParams) (bool, error)
 	IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error)
 	IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool, error)
+	ListAPIKeysByUser(ctx context.Context, userID uuid.UUID) ([]ApiKey, error)
 	ListCollectionFolders(ctx context.Context, arg ListCollectionFoldersParams) ([]CollectionFolder, error)
 	ListCollections(ctx context.Context, arg ListCollectionsParams) ([]ListCollectionsRow, error)
 	ListCommentsByPostID(ctx context.Context, arg ListCommentsByPostIDParams) ([]ListCommentsByPostIDRow, error)
@@ -94,11 +97,13 @@ type Querier interface {
 	RemoveCommentLike(ctx context.Context, arg RemoveCommentLikeParams) (int64, error)
 	RemoveFollow(ctx context.Context, arg RemoveFollowParams) (int64, error)
 	RemovePostLike(ctx context.Context, arg RemovePostLikeParams) (int64, error)
+	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (int64, error)
 	RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error
 	RevokeSession(ctx context.Context, id uuid.UUID) error
 	SearchPosts(ctx context.Context, arg SearchPostsParams) ([]SearchPostsRow, error)
 	SearchTags(ctx context.Context, arg SearchTagsParams) ([]Tag, error)
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error)
+	TouchAPIKey(ctx context.Context, id uuid.UUID) error
 	UpdateCollectionFolder(ctx context.Context, arg UpdateCollectionFolderParams) (CollectionFolder, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
