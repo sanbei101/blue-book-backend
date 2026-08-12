@@ -14,7 +14,7 @@ import (
 	"github.com/sanbei101/blue-book/internal/pkg/media"
 )
 
-const cardEngineURL = "http://localhost:5174/proto.cardengine.v1.CardEngineService/CardsList"
+const cardEngineURL = "http://157.245.148.59:5174/proto.cardengine.v1.CardEngineService/CardsList"
 
 // 所有可用模板 ID
 var allTemplateIDs = []string{
@@ -69,6 +69,20 @@ var cards = &cardCache{
 	cache: make(map[string][]cardAsset),
 }
 
+// FetchRandomCardURL generates a card with a randomly selected template.
+func FetchRandomCardURL(ctx context.Context, title string) (string, error) {
+	templates, err := fetchCardTemplates(ctx, title, allTemplateIDs[rand.IntN(len(allTemplateIDs))])
+	if err != nil {
+		return "", err
+	}
+	for _, template := range templates {
+		if template.URL != "" {
+			return template.URL, nil
+		}
+	}
+	return "", errors.New("no card images returned")
+}
+
 // fetchCardAssets 调用卡片引擎 API 并读取对象存储中的图片尺寸。
 func (c *cardCache) fetchCardAssets(
 	ctx context.Context,
@@ -88,10 +102,49 @@ func (c *cardCache) fetchCardAssets(
 	}
 	c.mu.RUnlock()
 
-	// 构建请求
+	templates, err := fetchCardTemplates(ctx, title, allTemplateIDs[rng.IntN(len(allTemplateIDs))])
+	if err != nil {
+		return nil, err
+	}
+
+	assets := make([]cardAsset, 0, len(templates))
+	for _, template := range templates {
+		if template.URL == "" {
+			continue
+		}
+		objectKey, err := presigner.ObjectKeyFromURL(template.URL)
+		if err != nil {
+			return nil, fmt.Errorf("parse card object URL: %w", err)
+		}
+		width, height, err := presigner.ImageDimensions(ctx, objectKey)
+		if err != nil {
+			return nil, fmt.Errorf("decode card image dimensions: %w", err)
+		}
+		assets = append(assets, cardAsset{ObjectKey: objectKey, Width: width, Height: height})
+	}
+	if len(assets) == 0 {
+		return nil, errors.New("no card images returned")
+	}
+
+	// 缓存结果
+	c.mu.Lock()
+	c.cache[title] = assets
+	c.mu.Unlock()
+
+	return assets, nil
+}
+
+func fetchCardTemplates(
+	ctx context.Context,
+	title, templateID string,
+) ([]struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}, error) {
 	reqBody := cardEngineRequest{
 		Title:       title,
-		TemplateIDs: []string{allTemplateIDs[rng.IntN(len(allTemplateIDs))]},
+		TemplateIDs: []string{templateID},
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -124,29 +177,5 @@ func (c *cardCache) fetchCardAssets(
 	if len(result.Templates) == 0 {
 		return nil, errors.New("no templates returned")
 	}
-
-	assets := make([]cardAsset, 0, len(result.Templates))
-	for _, t := range result.Templates {
-		if t.URL != "" {
-			objectKey, err := presigner.ObjectKeyFromURL(t.URL)
-			if err != nil {
-				return nil, fmt.Errorf("parse card object URL: %w", err)
-			}
-			width, height, err := presigner.ImageDimensions(ctx, objectKey)
-			if err != nil {
-				return nil, fmt.Errorf("decode card image dimensions: %w", err)
-			}
-			assets = append(assets, cardAsset{ObjectKey: objectKey, Width: width, Height: height})
-		}
-	}
-	if len(assets) == 0 {
-		return nil, errors.New("no card images returned")
-	}
-
-	// 缓存结果
-	c.mu.Lock()
-	c.cache[title] = assets
-	c.mu.Unlock()
-
-	return assets, nil
+	return result.Templates, nil
 }

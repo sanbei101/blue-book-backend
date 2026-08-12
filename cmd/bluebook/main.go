@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
@@ -16,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sanbei101/blue-book/internal/seed"
 )
 
 const defaultAPIURL = "http://localhost:8080/api/v1"
@@ -222,11 +225,29 @@ func runPostWrite(c *client, args []string) error {
 	for _, key := range videos {
 		media = append(media, map[string]any{"media_key": key, "media_type": "video", "sort_order": len(media)})
 	}
+	if len(media) == 0 {
+		coverURL, err := generatedCoverURL(c, *title)
+		if err != nil {
+			return fmt.Errorf("生成文字帖封面: %w", err)
+		}
+		media = append(media, map[string]any{"media_key": coverURL, "media_type": "image", "sort_order": 0})
+	}
 	body := map[string]any{"title": *title, "content": *content, "tags": tags, "media": media}
 	if update {
 		return call(c, http.MethodPatch, "/posts/"+postID, body)
 	}
 	return call(c, http.MethodPost, "/posts", body)
+}
+
+func generatedCoverURL(c *client, title string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.http.Timeout)
+	defer cancel()
+
+	cardURL, err := seed.FetchRandomCardURL(ctx, title)
+	if err != nil {
+		return "", fmt.Errorf("调用卡片引擎: %w", err)
+	}
+	return cardURL, nil
 }
 
 func runComment(c *client, args []string) error {

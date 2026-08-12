@@ -20,7 +20,7 @@ func main() {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://postgres:password@localhost:5432/blue_book?sslmode=disable"
+		databaseURL = "postgres://dexteleop:password@localhost:5432/blue_book?sslmode=disable"
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")

@@ -15,7 +15,7 @@ func main() {
 
 	pool, err := pgxpool.New(
 		ctx,
-		"postgres://postgres:password@localhost:5432/blue_book?sslmode=disable",
+		"postgres://dexteleop:password@localhost:5432/blue_book?sslmode=disable",
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("无法连接数据库")

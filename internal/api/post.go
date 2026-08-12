@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -226,13 +227,20 @@ func (h *PostHandler) toCreatePostMediaParams(
 			mediaType = db.MediaTypeEnumVideo
 		}
 
+		mediaKey := item.MediaKey
 		var width, height int32
 		if mediaType == db.MediaTypeEnumImage {
 			if h.presigner == nil {
 				return nil, media.ErrNotConfigured
 			}
+			if parsed, err := url.ParseRequestURI(mediaKey); err == nil && parsed.IsAbs() {
+				mediaKey, err = h.presigner.ObjectKeyFromURL(mediaKey)
+				if err != nil {
+					return nil, err
+				}
+			}
 			var err error
-			width, height, err = h.presigner.ImageDimensions(ctx, item.MediaKey)
+			width, height, err = h.presigner.ImageDimensions(ctx, mediaKey)
 			if err != nil {
 				return nil, err
 			}
@@ -241,7 +249,7 @@ func (h *PostHandler) toCreatePostMediaParams(
 		params[i] = db.CreatePostMediaParams{
 			ID:        uuid.Must(uuid.NewV7()),
 			PostID:    postID,
-			MediaKey:  item.MediaKey,
+			MediaKey:  mediaKey,
 			MediaType: mediaType,
 			Width:     width,
 			Height:    height,
