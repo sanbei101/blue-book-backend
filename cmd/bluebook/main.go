@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"flag"
@@ -108,8 +109,7 @@ func writeResponse(payload []byte) error {
 	if len(payload) == 0 {
 		return nil
 	}
-	var decoded any
-	if err := json.Unmarshal(payload, &decoded); err != nil {
+	if !jsontext.Value(payload).IsValid() {
 		return errors.New("服务返回了无效 JSON")
 	}
 	_, err := os.Stdout.Write(append(payload, '\n'))
@@ -150,8 +150,7 @@ func runAPI(c *client, args []string) error {
 	}
 	var body []byte
 	if *data != "" {
-		var value any
-		if err := json.Unmarshal([]byte(*data), &value); err != nil {
+		if !jsontext.Value(*data).IsValid() {
 			return errors.New("--data 必须是合法 JSON")
 		}
 		body = []byte(*data)
@@ -355,7 +354,10 @@ func runMedia(c *client, args []string) error {
 	return writeResponse(mustJSON(map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType}))
 }
 
-func mustJSON(value any) []byte { payload, _ := json.Marshal(value); return payload }
+func mustJSON(value any) []byte {
+	payload, _ := json.Marshal(value)
+	return payload
+}
 
 func query(args []string) string {
 	if len(args) == 0 {
