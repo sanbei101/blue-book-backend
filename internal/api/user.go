@@ -47,9 +47,146 @@ type authResponse struct {
 	User userResponse `json:"user" validate:"required"`
 }
 
+type createAPIKeyRequest struct {
+	// Key name shown in account settings.
+	Name string `json:"name" validate:"required,max=100"`
+}
+
+type createAPIKeyResponse struct {
+	ID        uuid.UUID `json:"id"         validate:"required"`
+	Name      string    `json:"name"       validate:"required"`
+	Key       string    `json:"key"        validate:"required"`
+	KeyPrefix string    `json:"key_prefix" validate:"required"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
+}
+
+type apiKeyResponse struct {
+	ID         uuid.UUID  `json:"id"                    validate:"required"`
+	Name       string     `json:"name"                  validate:"required"`
+	KeyPrefix  string     `json:"key_prefix"            validate:"required"`
+	CreatedAt  time.Time  `json:"created_at"            validate:"required"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+}
+
+func toAPIKeyResponse(key *db.ApiKey) apiKeyResponse {
+	response := apiKeyResponse{
+		ID:        key.ID,
+		Name:      key.Name,
+		KeyPrefix: key.KeyPrefix,
+		CreatedAt: key.CreatedAt,
+	}
+	if key.LastUsedAt.Valid {
+		lastUsedAt := key.LastUsedAt.Time
+		response.LastUsedAt = &lastUsedAt
+	}
+	if key.RevokedAt.Valid {
+		revokedAt := key.RevokedAt.Time
+		response.RevokedAt = &revokedAt
+	}
+	return response
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// 创建 API Key
+//
+//	@Summary	创建 API Key
+//	@Tags		auth
+//	@Security	BearerAuth
+//	@Param		body	body		createAPIKeyRequest	true	"API Key 信息"
+//	@Success	200		{object}	render.Response[createAPIKeyResponse]
+//	@Failure	400		{object}	render.errorResponse
+//	@Failure	500		{object}	render.errorResponse
+//	@Router		/auth/api-keys [post]
+func (h *UserHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	body, err := render.ReadBody[createAPIKeyRequest](w, r)
+	if err != nil {
+		return
+	}
+	key, err := jwt.GenerateAPIKey()
+	if err != nil {
+		log.Error().Err(err).Msg("生成 API Key 失败")
+		render.Error(w, http.StatusInternalServerError, "创建 API Key 失败")
+		return
+	}
+	created, err := h.store.CreateAPIKey(r.Context(), db.CreateAPIKeyParams{
+		ID:        uuid.Must(uuid.NewV7()),
+		UserID:    jwt.GetUserIDFromContext(r),
+		Name:      body.Name,
+		KeyPrefix: key[:12],
+		KeyHash:   jwt.HashAPIKey(key),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("创建 API Key 失败")
+		render.Error(w, http.StatusInternalServerError, "创建 API Key 失败")
+		return
+	}
+	render.Success(w, "创建成功，请立即保存密钥", createAPIKeyResponse{
+		ID:        created.ID,
+		Name:      created.Name,
+		Key:       key,
+		KeyPrefix: created.KeyPrefix,
+		CreatedAt: created.CreatedAt,
+	})
+}
+
+// 获取 API Key 列表
+//
+//	@Summary	获取 API Key 列表
+//	@Tags		auth
+//	@Security	BearerAuth
+//	@Success	200	{object}	render.Response[[]apiKeyResponse]
+//	@Failure	500	{object}	render.errorResponse
+//	@Router		/auth/api-keys [get]
+func (h *UserHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := h.store.ListAPIKeysByUser(r.Context(), jwt.GetUserIDFromContext(r))
+	if err != nil {
+		log.Error().Err(err).Msg("获取 API Key 列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取 API Key 列表失败")
+		return
+	}
+	response := make([]apiKeyResponse, 0, len(keys))
+	for i := range keys {
+		response = append(response, toAPIKeyResponse(&keys[i]))
+	}
+	render.Success(w, "查询成功", response)
+}
+
+// 撤销 API Key
+//
+//	@Summary	撤销 API Key
+//	@Tags		auth
+//	@Security	BearerAuth
+//	@Param		key_id	path		string	true	"API Key ID"
+//	@Success	204		{object}	render.ResponseWithoutData
+//	@Failure	400		{object}	render.errorResponse
+//	@Failure	404		{object}	render.errorResponse
+//	@Failure	500		{object}	render.errorResponse
+//	@Router		/auth/api-keys/{key_id} [delete]
+func (h *UserHandler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	keyID, err := uuid.Parse(chi.URLParam(r, "key_id"))
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, "无效的 API Key ID")
+		return
+	}
+	rows, err := h.store.RevokeAPIKey(r.Context(), db.RevokeAPIKeyParams{
+		ID:     keyID,
+		UserID: jwt.GetUserIDFromContext(r),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("撤销 API Key 失败")
+		render.Error(w, http.StatusInternalServerError, "撤销 API Key 失败")
+		return
+	}
+	if rows == 0 {
+		render.Error(w, http.StatusNotFound, "API Key 不存在或已撤销")
+		return
+	}
+	render.SuccessNoData(w, "撤销成功")
 }
 
 func (h *UserHandler) issueTokens(ctx context.Context, userID uuid.UUID) (authResponse, error) {
