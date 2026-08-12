@@ -107,9 +107,9 @@ func HashRefreshToken(token string) string {
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
-// JWTAuthMiddleware only accepts short-lived access tokens. Use it for account
+// AuthMiddleware only accepts short-lived access tokens. Use it for account
 // security operations that a delegated API key must not perform.
-func JWTAuthMiddleware(next http.Handler) http.Handler {
+func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if jwtVerifier == nil {
 			render.Error(w, http.StatusInternalServerError, "认证服务未配置")
@@ -171,8 +171,8 @@ func authenticateAPIKey(r *http.Request, store *db.Store) (uuid.UUID, bool, erro
 	return key.UserID, true, nil
 }
 
-// AuthMiddleware accepts either a short-lived JWT or a user's delegated API key.
-func AuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
+// DelegatedAuthMiddleware accepts either a short-lived JWT or a user's delegated API key.
+func DelegatedAuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, ok, err := authenticateAPIKey(r, store)
@@ -185,7 +185,7 @@ func AuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
-			JWTAuthMiddleware(next).ServeHTTP(w, r)
+			AuthMiddleware(next).ServeHTTP(w, r)
 		})
 	}
 }

@@ -77,7 +77,7 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 
 		// API key lifecycle changes account access and therefore requires a JWT.
 		r.Group(func(r chi.Router) {
-			r.Use(jwt.JWTAuthMiddleware)
+			r.Use(jwt.AuthMiddleware)
 			r.Post("/auth/api-keys", userHandler.CreateAPIKey)
 			r.Get("/auth/api-keys", userHandler.ListAPIKeys)
 			r.Delete("/auth/api-keys/{key_id}", userHandler.RevokeAPIKey)
@@ -87,7 +87,7 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 
 		// 需要认证的路由
 		r.Group(func(r chi.Router) {
-			r.Use(jwt.AuthMiddleware(store))
+			r.Use(jwt.DelegatedAuthMiddleware(store))
 			r.Get("/auth/me", userHandler.Me)
 			r.Get("/me/profile", userHandler.MyProfile)
 			r.Put("/users/profile", userHandler.UpdateProfile)

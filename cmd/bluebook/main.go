@@ -360,7 +360,11 @@ func runMedia(c *client, args []string) error {
 	}
 
 	var respBody bytes.Buffer
-	if err := json.MarshalWrite(&respBody, map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType}); err != nil {
+	err = json.MarshalWrite(
+		&respBody,
+		map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType},
+	)
+	if err != nil {
 		return err
 	}
 	return writeResponse(respBody.Bytes())
