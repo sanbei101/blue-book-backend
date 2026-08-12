@@ -322,10 +322,16 @@ func runMedia(c *client, args []string) error {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	payload, err := c.request(http.MethodPost, "/media/presign", mustJSON(map[string]string{"content_type": contentType}), "application/json")
+
+	reqBody, err := json.Marshal(map[string]string{"content_type": contentType})
 	if err != nil {
 		return err
 	}
+	payload, err := c.request(http.MethodPost, "/media/presign", reqBody, "application/json")
+	if err != nil {
+		return err
+	}
+
 	var result struct {
 		Data struct {
 			UploadURL string `json:"upload_url"`
@@ -338,6 +344,7 @@ func runMedia(c *client, args []string) error {
 	if result.Data.UploadURL == "" || result.Data.ObjectKey == "" {
 		return errors.New("预签名响应不完整")
 	}
+
 	upload, err := http.NewRequest(http.MethodPut, result.Data.UploadURL, file)
 	if err != nil {
 		return err
@@ -351,12 +358,12 @@ func runMedia(c *client, args []string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("媒体上传失败: %s", resp.Status)
 	}
-	return writeResponse(mustJSON(map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType}))
-}
 
-func mustJSON(value any) []byte {
-	payload, _ := json.Marshal(value)
-	return payload
+	respBody, err := json.Marshal(map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType})
+	if err != nil {
+		return err
+	}
+	return writeResponse(respBody)
 }
 
 func query(args []string) string {
