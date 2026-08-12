@@ -61,10 +61,10 @@ type createAPIKeyResponse struct {
 }
 
 type apiKeyResponse struct {
-	ID         uuid.UUID  `json:"id"                    validate:"required"`
-	Name       string     `json:"name"                  validate:"required"`
-	KeyPrefix  string     `json:"key_prefix"            validate:"required"`
-	CreatedAt  time.Time  `json:"created_at"            validate:"required"`
+	ID         uuid.UUID  `json:"id"                     validate:"required"`
+	Name       string     `json:"name"                   validate:"required"`
+	KeyPrefix  string     `json:"key_prefix"             validate:"required"`
+	CreatedAt  time.Time  `json:"created_at"             validate:"required"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
 }

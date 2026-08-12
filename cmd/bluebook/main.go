@@ -118,12 +118,12 @@ func writeResponse(payload []byte) error {
 
 func call(c *client, method, path string, value any) error {
 	var body []byte
-	var err error
 	if value != nil {
-		body, err = json.Marshal(value)
-		if err != nil {
+		var buf bytes.Buffer
+		if err := json.MarshalWrite(&buf, value); err != nil {
 			return err
 		}
+		body = buf.Bytes()
 	}
 	payload, err := c.request(method, path, body, "application/json")
 	if err != nil {
@@ -323,11 +323,11 @@ func runMedia(c *client, args []string) error {
 		contentType = "application/octet-stream"
 	}
 
-	reqBody, err := json.Marshal(map[string]string{"content_type": contentType})
-	if err != nil {
+	var reqBody bytes.Buffer
+	if err := json.MarshalWrite(&reqBody, map[string]string{"content_type": contentType}); err != nil {
 		return err
 	}
-	payload, err := c.request(http.MethodPost, "/media/presign", reqBody, "application/json")
+	payload, err := c.request(http.MethodPost, "/media/presign", reqBody.Bytes(), "application/json")
 	if err != nil {
 		return err
 	}
@@ -359,11 +359,11 @@ func runMedia(c *client, args []string) error {
 		return fmt.Errorf("媒体上传失败: %s", resp.Status)
 	}
 
-	respBody, err := json.Marshal(map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType})
-	if err != nil {
+	var respBody bytes.Buffer
+	if err := json.MarshalWrite(&respBody, map[string]string{"object_key": result.Data.ObjectKey, "content_type": contentType}); err != nil {
 		return err
 	}
-	return writeResponse(respBody)
+	return writeResponse(respBody.Bytes())
 }
 
 func query(args []string) string {
