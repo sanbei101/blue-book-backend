@@ -141,7 +141,8 @@ func fetchCardTemplates(
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	URL  string `json:"url"`
-}, error) {
+}, error,
+) {
 	reqBody := cardEngineRequest{
 		Title:       title,
 		TemplateIDs: []string{templateID},

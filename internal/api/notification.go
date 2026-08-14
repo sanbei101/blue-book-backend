@@ -27,12 +27,12 @@ type notificationActorResponse struct {
 }
 
 type notificationResponse struct {
-	ID               uuid.UUID                 `json:"id"                validate:"required"`
-	NotificationType string                    `json:"notification_type" validate:"required"`
+	ID               uuid.UUID                 `json:"id"                   validate:"required"`
+	NotificationType string                    `json:"notification_type"    validate:"required"`
 	PostID           *uuid.UUID                `json:"post_id,omitempty"`
 	CommentID        *uuid.UUID                `json:"comment_id,omitempty"`
-	Actor            notificationActorResponse `json:"actor"             validate:"required"`
-	CreatedAt        time.Time                 `json:"created_at"        validate:"required"`
+	Actor            notificationActorResponse `json:"actor"                validate:"required"`
+	CreatedAt        time.Time                 `json:"created_at"           validate:"required"`
 	ReadAt           *time.Time                `json:"read_at,omitempty"`
 }
 
