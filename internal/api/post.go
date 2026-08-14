@@ -425,6 +425,57 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
 }
 
+// 获取关注用户的帖子列表
+//
+//	@Summary	获取关注用户的帖子列表
+//	@Tags		posts
+//	@Security	BearerAuth
+//	@Param		page		query		int	false	"页码"	default(1)
+//	@Param		page_size	query		int	false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
+//	@Failure	500			{object}	render.errorResponse
+//	@Router		/feed/following [get]
+func (h *PostHandler) ListFollowingFeed(w http.ResponseWriter, r *http.Request) {
+	userID := jwt.GetUserIDFromContext(r)
+	offset, pageSize := Pagination(r, 1, 20, 50)
+	rows, err := h.store.ListFollowingPosts(r.Context(), db.ListFollowingPostsParams{
+		UserID: userID, OffsetCount: int32(offset), LimitCount: int32(pageSize),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("获取关注流失败")
+		render.Error(w, http.StatusInternalServerError, "获取关注流失败")
+		return
+	}
+	total, err := h.store.CountFollowingPosts(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计关注流失败")
+		render.Error(w, http.StatusInternalServerError, "获取关注流失败")
+		return
+	}
+
+	posts := make([]listPostsItemResponse, 0, len(rows))
+	for i := range rows {
+		item := listPostsItemResponse{
+			ID: rows[i].ID, Title: rows[i].Title, Content: rows[i].Content,
+			ViewCount: rows[i].ViewCount, LikeCount: rows[i].LikeCount,
+			CollectCount: rows[i].CollectCount, CommentCount: rows[i].CommentCount,
+			CoverURL: media.CDNURL(rows[i].CoverKey), Width: rows[i].Width,
+			Height: rows[i].Height, CreatedAt: rows[i].CreatedAt,
+			Author: toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, userID, item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取关注流查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取关注流失败")
+			return
+		}
+		posts = append(posts, item)
+	}
+	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
+}
+
 // 获取帖子详情
 //
 //	@Summary	获取帖子详情

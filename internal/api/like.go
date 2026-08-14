@@ -11,6 +11,7 @@ import (
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
+	"github.com/sanbei101/blue-book/internal/pkg/media"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
 )
 
@@ -59,7 +60,66 @@ func (h *LikeHandler) likePostTx(r *http.Request, q *db.Queries, userID, postID 
 	if err != nil {
 		return likeStatusResponse{}, err
 	}
+	if rows > 0 && post.UserID != userID {
+		postIDCopy := postID
+		if err := q.CreatePostNotification(r.Context(), db.CreatePostNotificationParams{
+			ID: uuid.Must(uuid.NewV7()), RecipientID: post.UserID, ActorID: userID,
+			NotificationType: "post_liked", PostID: &postIDCopy,
+		}); err != nil {
+			return likeStatusResponse{}, err
+		}
+	}
 	return likeStatusResponse{ViewerLiked: liked, LikeCount: post.LikeCount}, nil
+}
+
+// 获取我点赞的帖子
+//
+//	@Summary	获取我点赞的帖子
+//	@Tags		likes
+//	@Security	BearerAuth
+//	@Param		page		query		int	false	"页码"	default(1)
+//	@Param		page_size	query		int	false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
+//	@Failure	500			{object}	render.errorResponse
+//	@Router		/me/likes [get]
+func (h *LikeHandler) ListLikedPosts(w http.ResponseWriter, r *http.Request) {
+	userID := jwt.GetUserIDFromContext(r)
+	offset, pageSize := Pagination(r, 1, 20, 50)
+	rows, err := h.store.ListLikedPosts(r.Context(), db.ListLikedPostsParams{
+		UserID: userID, OffsetCount: int32(offset), LimitCount: int32(pageSize),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("获取点赞列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取点赞列表失败")
+		return
+	}
+	total, err := h.store.CountLikedPosts(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Msg("统计点赞列表失败")
+		render.Error(w, http.StatusInternalServerError, "获取点赞列表失败")
+		return
+	}
+	items := make([]listPostsItemResponse, 0, len(rows))
+	for i := range rows {
+		item := listPostsItemResponse{
+			ID: rows[i].ID, Title: rows[i].Title, Content: rows[i].Content,
+			ViewCount: rows[i].ViewCount, LikeCount: rows[i].LikeCount,
+			CollectCount: rows[i].CollectCount, CommentCount: rows[i].CommentCount,
+			CoverURL: media.CDNURL(rows[i].CoverKey), Width: rows[i].Width,
+			Height: rows[i].Height, CreatedAt: rows[i].CreatedAt,
+			Author: toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, userID, item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取点赞帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取点赞列表失败")
+			return
+		}
+		items = append(items, item)
+	}
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
 // 点赞帖子
@@ -188,6 +248,16 @@ func (h *LikeHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
 		comment, err := q.GetCommentByID(r.Context(), commentID)
 		if err != nil {
 			return err
+		}
+		if rows > 0 && comment.UserID != userID {
+			postIDCopy := comment.PostID
+			commentIDCopy := comment.ID
+			if err := q.CreateCommentNotification(r.Context(), db.CreateCommentNotificationParams{
+				ID: uuid.Must(uuid.NewV7()), RecipientID: comment.UserID, ActorID: userID,
+				NotificationType: "comment_liked", PostID: &postIDCopy, CommentID: &commentIDCopy,
+			}); err != nil {
+				return err
+			}
 		}
 		liked, err := q.IsCommentLiked(r.Context(), db.IsCommentLikedParams{UserID: userID, CommentID: commentID})
 		if err != nil {

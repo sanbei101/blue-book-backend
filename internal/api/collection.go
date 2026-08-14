@@ -231,6 +231,77 @@ func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
 
+// 获取收藏夹中的帖子
+//
+//	@Summary	获取收藏夹中的帖子
+//	@Tags		collections
+//	@Security	BearerAuth
+//	@Param		folder_id	path		string	true	"收藏夹 ID"
+//	@Param		page		query		int		false	"页码"	default(1)
+//	@Param		page_size	query		int		false	"每页数量"	default(20)
+//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
+//	@Failure	400			{object}	render.errorResponse
+//	@Failure	404			{object}	render.errorResponse
+//	@Failure	500			{object}	render.errorResponse
+//	@Router		/me/collections/folders/{folder_id}/posts [get]
+func (h *CollectionHandler) ListFolderPosts(w http.ResponseWriter, r *http.Request) {
+	userID := jwt.GetUserIDFromContext(r)
+	folderID, ok := parseUUIDParam(r, "folder_id")
+	if !ok {
+		render.Error(w, http.StatusBadRequest, "无效的收藏夹 ID")
+		return
+	}
+	if _, err := h.store.GetCollectionFolderByID(r.Context(), db.GetCollectionFolderByIDParams{
+		ID: folderID, UserID: userID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			render.Error(w, http.StatusNotFound, "收藏夹不存在")
+			return
+		}
+		log.Error().Err(err).Msg("获取收藏夹失败")
+		render.Error(w, http.StatusInternalServerError, "获取收藏夹帖子失败")
+		return
+	}
+	offset, pageSize := Pagination(r, 1, 20, 50)
+	rows, err := h.store.ListCollectionFolderPosts(r.Context(), db.ListCollectionFolderPostsParams{
+		UserID: userID, FolderID: &folderID, OffsetCount: int32(offset), LimitCount: int32(pageSize),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("获取收藏夹帖子失败")
+		render.Error(w, http.StatusInternalServerError, "获取收藏夹帖子失败")
+		return
+	}
+	total, err := h.store.CountCollectionFolderPosts(r.Context(), db.CountCollectionFolderPostsParams{
+		UserID: userID, FolderID: &folderID,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("统计收藏夹帖子失败")
+		render.Error(w, http.StatusInternalServerError, "获取收藏夹帖子失败")
+		return
+	}
+	items := make([]listPostsItemResponse, 0, len(rows))
+	for i := range rows {
+		item := listPostsItemResponse{
+			ID: rows[i].ID, Title: rows[i].Title, Content: rows[i].Content,
+			ViewCount: rows[i].ViewCount, LikeCount: rows[i].LikeCount,
+			CollectCount: rows[i].CollectCount, CommentCount: rows[i].CommentCount,
+			CoverURL: media.CDNURL(rows[i].CoverKey), Width: rows[i].Width,
+			Height: rows[i].Height, CreatedAt: rows[i].CreatedAt,
+			Author: toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
+		}
+		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
+			r.Context(), h.store, userID, item.ID, item.Author.ID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("获取收藏夹帖子查看者状态失败")
+			render.Error(w, http.StatusInternalServerError, "获取收藏夹帖子失败")
+			return
+		}
+		items = append(items, item)
+	}
+	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
+}
+
 type folderResponse struct {
 	// 收藏夹 ID
 	ID uuid.UUID `json:"id" validate:"required"`

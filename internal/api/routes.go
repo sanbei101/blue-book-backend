@@ -49,6 +49,7 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 	collectionHandler := NewCollectionHandler(store)
 	mediaHandler := NewMediaHandler(presigner)
 	discoveryHandler := NewDiscoveryHandler(store)
+	notificationHandler := NewNotificationHandler(store)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// 认证
@@ -88,11 +89,18 @@ func RegisterRoutesWithMedia(store *db.Store, presigner *media.Presigner) *chi.M
 		// 需要认证的路由
 		r.Group(func(r chi.Router) {
 			r.Use(jwt.DelegatedAuthMiddleware(store))
+			r.Get("/feed/following", postHandler.ListFollowingFeed)
 			r.Get("/auth/me", userHandler.Me)
 			r.Get("/me/profile", userHandler.MyProfile)
 			r.Put("/users/profile", userHandler.UpdateProfile)
 			r.Get("/me/search-history", discoveryHandler.ListHistory)
 			r.Delete("/me/search-history", discoveryHandler.DeleteHistory)
+			r.Get("/me/likes", likeHandler.ListLikedPosts)
+			r.Get("/me/collections/folders/{folder_id}/posts", collectionHandler.ListFolderPosts)
+			r.Get("/notifications", notificationHandler.List)
+			r.Get("/notifications/unread-count", notificationHandler.UnreadCount)
+			r.Patch("/notifications/{notification_id}/read", notificationHandler.MarkRead)
+			r.Post("/notifications/read-all", notificationHandler.MarkAllRead)
 			r.Post("/tags", discoveryHandler.CreateTag)
 
 			r.Post("/media/presign", mediaHandler.Presign)

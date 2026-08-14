@@ -55,6 +55,22 @@ func (q *Queries) CountFollowing(ctx context.Context, followerID uuid.UUID) (int
 	return column_1, err
 }
 
+const createFollowNotification = `-- name: CreateFollowNotification :exec
+INSERT INTO notifications (id, recipient_id, actor_id, notification_type)
+VALUES ($1, $2, $3, 'user_followed')
+`
+
+type CreateFollowNotificationParams struct {
+	ID          uuid.UUID `json:"id"`
+	RecipientID uuid.UUID `json:"recipient_id"`
+	ActorID     uuid.UUID `json:"actor_id"`
+}
+
+func (q *Queries) CreateFollowNotification(ctx context.Context, arg CreateFollowNotificationParams) error {
+	_, err := q.db.Exec(ctx, createFollowNotification, arg.ID, arg.RecipientID, arg.ActorID)
+	return err
+}
+
 const getFollowerCount = `-- name: GetFollowerCount :one
 SELECT COUNT(*)::bigint FROM follows WHERE following_id = $1
 `

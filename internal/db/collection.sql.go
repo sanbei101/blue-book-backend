@@ -33,6 +33,24 @@ func (q *Queries) AddCollection(ctx context.Context, arg AddCollectionParams) (i
 	return result.RowsAffected(), nil
 }
 
+const countCollectionFolderPosts = `-- name: CountCollectionFolderPosts :one
+SELECT COUNT(*)::bigint
+FROM collections
+WHERE user_id = $1 AND folder_id = $2
+`
+
+type CountCollectionFolderPostsParams struct {
+	UserID   uuid.UUID  `json:"user_id"`
+	FolderID *uuid.UUID `json:"folder_id"`
+}
+
+func (q *Queries) CountCollectionFolderPosts(ctx context.Context, arg CountCollectionFolderPostsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCollectionFolderPosts, arg.UserID, arg.FolderID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countCollectionFolders = `-- name: CountCollectionFolders :one
 SELECT COUNT(*)::bigint FROM collection_folders WHERE user_id = $1
 `
@@ -138,6 +156,96 @@ func (q *Queries) IsCollected(ctx context.Context, arg IsCollectedParams) (bool,
 	var collected bool
 	err := row.Scan(&collected)
 	return collected, err
+}
+
+const listCollectionFolderPosts = `-- name: ListCollectionFolderPosts :many
+SELECT
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
+    u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height,
+    c.created_at AS collected_at
+FROM collections c
+JOIN posts p ON p.id = c.post_id
+JOIN users u ON p.user_id = u.id
+LEFT JOIN LATERAL (
+    SELECT media_key, width, height
+    FROM post_media
+    WHERE post_id = p.id
+    ORDER BY sort_order ASC
+    LIMIT 1
+) pm ON true
+WHERE c.user_id = $1 AND c.folder_id = $2
+ORDER BY c.created_at DESC, c.post_id DESC
+LIMIT $4 OFFSET $3
+`
+
+type ListCollectionFolderPostsParams struct {
+	UserID      uuid.UUID  `json:"user_id"`
+	FolderID    *uuid.UUID `json:"folder_id"`
+	OffsetCount int32      `json:"offset_count"`
+	LimitCount  int32      `json:"limit_count"`
+}
+
+type ListCollectionFolderPostsRow struct {
+	ID             uuid.UUID   `json:"id"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
+	CreatedAt      time.Time   `json:"created_at"`
+	AuthorID       uuid.UUID   `json:"author_id"`
+	AuthorUsername string      `json:"author_username"`
+	AuthorAvatar   pgtype.Text `json:"author_avatar"`
+	CoverKey       string      `json:"cover_key"`
+	Width          int32       `json:"width"`
+	Height         int32       `json:"height"`
+	CollectedAt    time.Time   `json:"collected_at"`
+}
+
+func (q *Queries) ListCollectionFolderPosts(ctx context.Context, arg ListCollectionFolderPostsParams) ([]ListCollectionFolderPostsRow, error) {
+	rows, err := q.db.Query(ctx, listCollectionFolderPosts,
+		arg.UserID,
+		arg.FolderID,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCollectionFolderPostsRow{}
+	for rows.Next() {
+		var i ListCollectionFolderPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Content,
+			&i.ViewCount,
+			&i.LikeCount,
+			&i.CollectCount,
+			&i.CommentCount,
+			&i.CreatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorAvatar,
+			&i.CoverKey,
+			&i.Width,
+			&i.Height,
+			&i.CollectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCollectionFolders = `-- name: ListCollectionFolders :many

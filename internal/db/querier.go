@@ -18,11 +18,15 @@ type Querier interface {
 	AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64, error)
 	AddPostTag(ctx context.Context, arg AddPostTagParams) (int64, error)
 	AddSearchHistory(ctx context.Context, arg AddSearchHistoryParams) error
+	CountCollectionFolderPosts(ctx context.Context, arg CountCollectionFolderPostsParams) (int64, error)
 	CountCollectionFolders(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountCollections(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountCommentsByPostID(ctx context.Context, postID uuid.UUID) (int64, error)
 	CountFollowers(ctx context.Context, followingID uuid.UUID) (int64, error)
 	CountFollowing(ctx context.Context, followerID uuid.UUID) (int64, error)
+	CountFollowingPosts(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountLikedPosts(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CountPostsByUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountPostsFeed(ctx context.Context) (int64, error)
@@ -36,11 +40,15 @@ type Querier interface {
 	CountTopicPosts(ctx context.Context, topicID uuid.UUID) (int64, error)
 	CountTopics(ctx context.Context) (int64, error)
 	CountTrendingSearches(ctx context.Context) (int64, error)
+	CountUnreadNotifications(ctx context.Context, recipientID uuid.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateCollectionFolder(ctx context.Context, arg CreateCollectionFolderParams) (CollectionFolder, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
+	CreateCommentNotification(ctx context.Context, arg CreateCommentNotificationParams) error
+	CreateFollowNotification(ctx context.Context, arg CreateFollowNotificationParams) error
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreatePostMedia(ctx context.Context, arg []CreatePostMediaParams) (int64, error)
+	CreatePostNotification(ctx context.Context, arg CreatePostNotificationParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (UserSession, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -77,11 +85,15 @@ type Querier interface {
 	IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error)
 	IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool, error)
 	ListAPIKeysByUser(ctx context.Context, userID uuid.UUID) ([]ApiKey, error)
+	ListCollectionFolderPosts(ctx context.Context, arg ListCollectionFolderPostsParams) ([]ListCollectionFolderPostsRow, error)
 	ListCollectionFolders(ctx context.Context, arg ListCollectionFoldersParams) ([]CollectionFolder, error)
 	ListCollections(ctx context.Context, arg ListCollectionsParams) ([]ListCollectionsRow, error)
 	ListCommentsByPostID(ctx context.Context, arg ListCommentsByPostIDParams) ([]ListCommentsByPostIDRow, error)
 	ListFollowers(ctx context.Context, arg ListFollowersParams) ([]ListFollowersRow, error)
 	ListFollowing(ctx context.Context, arg ListFollowingParams) ([]ListFollowingRow, error)
+	ListFollowingPosts(ctx context.Context, arg ListFollowingPostsParams) ([]ListFollowingPostsRow, error)
+	ListLikedPosts(ctx context.Context, arg ListLikedPostsParams) ([]ListLikedPostsRow, error)
+	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
 	ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error)
 	ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([]ListPostsFeedRow, error)
 	ListRecommendedPosts(ctx context.Context, arg ListRecommendedPostsParams) ([]ListRecommendedPostsRow, error)
@@ -91,6 +103,8 @@ type Querier interface {
 	ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) ([]ListTopicPostsRow, error)
 	ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error)
 	ListTrendingSearches(ctx context.Context, arg ListTrendingSearchesParams) ([]ListTrendingSearchesRow, error)
+	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	RecalculatePostCommentCount(ctx context.Context, postID uuid.UUID) error
 	RecordSearchTerm(ctx context.Context, keyword string) error
 	RemoveCollection(ctx context.Context, arg RemoveCollectionParams) (int64, error)

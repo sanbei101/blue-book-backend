@@ -58,11 +58,19 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		if _, err := q.GetUserByID(r.Context(), targetID); err != nil {
 			return err
 		}
-		if _, err := q.AddFollow(r.Context(), db.AddFollowParams{
+		rows, err := q.AddFollow(r.Context(), db.AddFollowParams{
 			FollowerID:  currentUserID,
 			FollowingID: targetID,
-		}); err != nil {
+		})
+		if err != nil {
 			return err
+		}
+		if rows > 0 {
+			if err := q.CreateFollowNotification(r.Context(), db.CreateFollowNotificationParams{
+				ID: uuid.Must(uuid.NewV7()), RecipientID: targetID, ActorID: currentUserID,
+			}); err != nil {
+				return err
+			}
 		}
 		following, err := q.IsFollowing(r.Context(), db.IsFollowingParams{
 			FollowerID:  currentUserID,

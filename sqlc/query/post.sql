@@ -40,6 +40,34 @@ ORDER BY p.created_at DESC, p.id DESC;
 -- name: CountPostsFeed :one
 SELECT COUNT(*)::bigint FROM posts;
 
+-- name: ListFollowingPosts :many
+SELECT
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
+    u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height
+FROM posts p
+JOIN follows f ON f.following_id = p.user_id
+JOIN users u ON p.user_id = u.id
+LEFT JOIN LATERAL (
+    SELECT media_key, width, height
+    FROM post_media
+    WHERE post_id = p.id
+    ORDER BY sort_order ASC
+    LIMIT 1
+) pm ON true
+WHERE f.follower_id = @user_id
+ORDER BY p.created_at DESC, p.id DESC
+LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CountFollowingPosts :one
+SELECT COUNT(*)::bigint
+FROM posts p
+JOIN follows f ON f.following_id = p.user_id
+WHERE f.follower_id = @user_id;
+
 -- name: GetPostByID :one
 SELECT
     p.id, p.user_id, p.title, p.content, p.view_count, p.like_count,

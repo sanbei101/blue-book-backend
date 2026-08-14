@@ -55,9 +55,11 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var comment db.Comment
 	err = h.store.ExecTx(r.Context(), func(q *db.Queries) error {
-		if _, err := q.GetPostByID(r.Context(), body.PostID); err != nil {
+		post, err := q.GetPostByID(r.Context(), body.PostID)
+		if err != nil {
 			return err
 		}
+		notificationRecipientID := post.UserID
 		if body.ParentID != nil {
 			parent, err := q.GetCommentByID(r.Context(), *body.ParentID)
 			if err != nil {
@@ -66,6 +68,7 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 			if parent.PostID != body.PostID {
 				return ErrCommentNotInPost
 			}
+			notificationRecipientID = parent.UserID
 		}
 		comment, err = q.CreateComment(r.Context(), db.CreateCommentParams{
 			ID:       uuid.Must(uuid.NewV7()),
@@ -77,7 +80,18 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		return q.IncrementPostCommentCount(r.Context(), body.PostID)
+		if err := q.IncrementPostCommentCount(r.Context(), body.PostID); err != nil {
+			return err
+		}
+		if notificationRecipientID != currentUserID {
+			postIDCopy := body.PostID
+			commentIDCopy := comment.ID
+			return q.CreateCommentNotification(r.Context(), db.CreateCommentNotificationParams{
+				ID: uuid.Must(uuid.NewV7()), RecipientID: notificationRecipientID, ActorID: currentUserID,
+				NotificationType: "comment_created", PostID: &postIDCopy, CommentID: &commentIDCopy,
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

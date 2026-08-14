@@ -44,3 +44,7 @@ JOIN users u ON f.following_id = u.id
 WHERE f.follower_id = @follower_id
 ORDER BY f.created_at DESC, f.following_id DESC
 LIMIT @limit_count OFFSET @offset_count;
+
+-- name: CreateFollowNotification :exec
+INSERT INTO notifications (id, recipient_id, actor_id, notification_type)
+VALUES (@id, @recipient_id, @actor_id, 'user_followed');

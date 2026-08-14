@@ -166,16 +166,16 @@ CREATE TABLE follows (
 );
 CREATE INDEX idx_follows_following_id ON follows(following_id);
 
-CREATE TABLE api_keys (
+CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    key_prefix VARCHAR(16) NOT NULL,
-    key_hash VARCHAR(64) UNIQUE NOT NULL,
+    recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    notification_type VARCHAR(32) NOT NULL,
+    post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+    comment_id UUID REFERENCES comments(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_used_at TIMESTAMPTZ,
-    revoked_at TIMESTAMPTZ
+    read_at TIMESTAMPTZ
 );
-
-CREATE INDEX idx_api_keys_user_id ON api_keys(user_id, created_at DESC);
-CREATE INDEX idx_api_keys_active ON api_keys(key_hash) WHERE revoked_at IS NULL;
+CREATE INDEX idx_notifications_recipient ON notifications(recipient_id, created_at DESC, id DESC);
+CREATE INDEX idx_notifications_unread ON notifications(recipient_id, created_at DESC)
+    WHERE read_at IS NULL;

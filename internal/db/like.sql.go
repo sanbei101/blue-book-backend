@@ -7,8 +7,10 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addCommentLike = `-- name: AddCommentLike :execrows
@@ -55,6 +57,19 @@ func (q *Queries) AddPostLike(ctx context.Context, arg AddPostLikeParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const countLikedPosts = `-- name: CountLikedPosts :one
+SELECT COUNT(*)::bigint
+FROM likes
+WHERE user_id = $1 AND target_type = 1
+`
+
+func (q *Queries) CountLikedPosts(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLikedPosts, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const isCommentLiked = `-- name: IsCommentLiked :one
 SELECT EXISTS(
     SELECT 1 FROM likes
@@ -91,6 +106,90 @@ func (q *Queries) IsPostLiked(ctx context.Context, arg IsPostLikedParams) (bool,
 	var liked bool
 	err := row.Scan(&liked)
 	return liked, err
+}
+
+const listLikedPosts = `-- name: ListLikedPosts :many
+SELECT
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
+    u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height,
+    l.created_at AS liked_at
+FROM likes l
+JOIN posts p ON p.id = l.target_id
+JOIN users u ON p.user_id = u.id
+LEFT JOIN LATERAL (
+    SELECT media_key, width, height
+    FROM post_media
+    WHERE post_id = p.id
+    ORDER BY sort_order ASC
+    LIMIT 1
+) pm ON true
+WHERE l.user_id = $1 AND l.target_type = 1
+ORDER BY l.created_at DESC, l.target_id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListLikedPostsParams struct {
+	UserID      uuid.UUID `json:"user_id"`
+	OffsetCount int32     `json:"offset_count"`
+	LimitCount  int32     `json:"limit_count"`
+}
+
+type ListLikedPostsRow struct {
+	ID             uuid.UUID   `json:"id"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
+	CreatedAt      time.Time   `json:"created_at"`
+	AuthorID       uuid.UUID   `json:"author_id"`
+	AuthorUsername string      `json:"author_username"`
+	AuthorAvatar   pgtype.Text `json:"author_avatar"`
+	CoverKey       string      `json:"cover_key"`
+	Width          int32       `json:"width"`
+	Height         int32       `json:"height"`
+	LikedAt        time.Time   `json:"liked_at"`
+}
+
+func (q *Queries) ListLikedPosts(ctx context.Context, arg ListLikedPostsParams) ([]ListLikedPostsRow, error) {
+	rows, err := q.db.Query(ctx, listLikedPosts, arg.UserID, arg.OffsetCount, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLikedPostsRow{}
+	for rows.Next() {
+		var i ListLikedPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Content,
+			&i.ViewCount,
+			&i.LikeCount,
+			&i.CollectCount,
+			&i.CommentCount,
+			&i.CreatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorAvatar,
+			&i.CoverKey,
+			&i.Width,
+			&i.Height,
+			&i.LikedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeCommentLike = `-- name: RemoveCommentLike :execrows

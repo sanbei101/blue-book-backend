@@ -13,6 +13,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countFollowingPosts = `-- name: CountFollowingPosts :one
+SELECT COUNT(*)::bigint
+FROM posts p
+JOIN follows f ON f.following_id = p.user_id
+WHERE f.follower_id = $1
+`
+
+func (q *Queries) CountFollowingPosts(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countFollowingPosts, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countPostsByUserID = `-- name: CountPostsByUserID :one
 SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1
 `
@@ -250,6 +264,87 @@ UPDATE posts SET view_count = view_count + 1 WHERE id = $1
 func (q *Queries) IncrementViewCount(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, incrementViewCount, id)
 	return err
+}
+
+const listFollowingPosts = `-- name: ListFollowingPosts :many
+SELECT
+    p.id, p.title, p.content, p.view_count, p.like_count, p.collect_count,
+    p.comment_count, p.created_at,
+    u.id AS author_id, u.username AS author_username, u.avatar_url AS author_avatar,
+    COALESCE(pm.media_key, '') AS cover_key,
+    COALESCE(pm.width, 0) AS width,
+    COALESCE(pm.height, 0) AS height
+FROM posts p
+JOIN follows f ON f.following_id = p.user_id
+JOIN users u ON p.user_id = u.id
+LEFT JOIN LATERAL (
+    SELECT media_key, width, height
+    FROM post_media
+    WHERE post_id = p.id
+    ORDER BY sort_order ASC
+    LIMIT 1
+) pm ON true
+WHERE f.follower_id = $1
+ORDER BY p.created_at DESC, p.id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListFollowingPostsParams struct {
+	UserID      uuid.UUID `json:"user_id"`
+	OffsetCount int32     `json:"offset_count"`
+	LimitCount  int32     `json:"limit_count"`
+}
+
+type ListFollowingPostsRow struct {
+	ID             uuid.UUID   `json:"id"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ViewCount      int64       `json:"view_count"`
+	LikeCount      int64       `json:"like_count"`
+	CollectCount   int64       `json:"collect_count"`
+	CommentCount   int64       `json:"comment_count"`
+	CreatedAt      time.Time   `json:"created_at"`
+	AuthorID       uuid.UUID   `json:"author_id"`
+	AuthorUsername string      `json:"author_username"`
+	AuthorAvatar   pgtype.Text `json:"author_avatar"`
+	CoverKey       string      `json:"cover_key"`
+	Width          int32       `json:"width"`
+	Height         int32       `json:"height"`
+}
+
+func (q *Queries) ListFollowingPosts(ctx context.Context, arg ListFollowingPostsParams) ([]ListFollowingPostsRow, error) {
+	rows, err := q.db.Query(ctx, listFollowingPosts, arg.UserID, arg.OffsetCount, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFollowingPostsRow{}
+	for rows.Next() {
+		var i ListFollowingPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Content,
+			&i.ViewCount,
+			&i.LikeCount,
+			&i.CollectCount,
+			&i.CommentCount,
+			&i.CreatedAt,
+			&i.AuthorID,
+			&i.AuthorUsername,
+			&i.AuthorAvatar,
+			&i.CoverKey,
+			&i.Width,
+			&i.Height,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPostsByUser = `-- name: ListPostsByUser :many

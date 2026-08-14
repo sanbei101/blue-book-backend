@@ -105,6 +105,17 @@ type Like struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type Notification struct {
+	ID               uuid.UUID          `json:"id"`
+	RecipientID      uuid.UUID          `json:"recipient_id"`
+	ActorID          uuid.UUID          `json:"actor_id"`
+	NotificationType string             `json:"notification_type"`
+	PostID           *uuid.UUID         `json:"post_id"`
+	CommentID        *uuid.UUID         `json:"comment_id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	ReadAt           pgtype.Timestamptz `json:"read_at"`
+}
+
 type Post struct {
 	ID           uuid.UUID `json:"id"`
 	UserID       uuid.UUID `json:"user_id"`
