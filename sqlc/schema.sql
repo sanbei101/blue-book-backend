@@ -47,8 +47,8 @@ CREATE TABLE posts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_posts_user_id ON posts(user_id);
-CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
+CREATE INDEX idx_posts_feed_cursor ON posts(created_at DESC, id DESC);
+CREATE INDEX idx_posts_user_created_at ON posts(user_id, created_at DESC, id DESC);
 CREATE INDEX idx_posts_search ON posts USING GIN (
     to_tsvector('simple', title || ' ' || content)
 );

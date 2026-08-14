@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -230,6 +231,36 @@ type commentResponse struct {
 	CreatedAt time.Time `json:"created_at" validate:"required"`
 }
 
+func applyViewerCommentLikedStates(
+	ctx context.Context,
+	store *db.Store,
+	viewerID uuid.UUID,
+	comments []commentResponse,
+) error {
+	if viewerID == uuid.Nil || len(comments) == 0 {
+		return nil
+	}
+	commentIDs := make([]uuid.UUID, 0, len(comments))
+	for i := range comments {
+		commentIDs = append(commentIDs, comments[i].ID)
+	}
+	rows, err := store.ListViewerCommentLikedStates(ctx, db.ListViewerCommentLikedStatesParams{
+		ViewerID:   viewerID,
+		CommentIds: commentIDs,
+	})
+	if err != nil {
+		return err
+	}
+	states := make(map[uuid.UUID]bool, len(rows))
+	for i := range rows {
+		states[rows[i].CommentID] = rows[i].ViewerLiked
+	}
+	for i := range comments {
+		comments[i].ViewerLiked = states[comments[i].ID]
+	}
+	return nil
+}
+
 // 获取帖子评论列表
 //
 //	@Summary	获取帖子评论列表
@@ -284,17 +315,12 @@ func (h *CommentHandler) ListByPost(w http.ResponseWriter, r *http.Request) {
 		if rows[i].AuthorAvatar.Valid {
 			c.AuthorAvatar = rows[i].AuthorAvatar.String
 		}
-		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
-			c.ViewerLiked, err = h.store.IsCommentLiked(r.Context(), db.IsCommentLikedParams{
-				UserID: viewerID, CommentID: c.ID,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("获取评论查看者状态失败")
-				render.Error(w, http.StatusInternalServerError, "获取评论列表失败")
-				return
-			}
-		}
 		comments = append(comments, c)
+	}
+	if err := applyViewerCommentLikedStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), comments); err != nil {
+		log.Error().Err(err).Msg("获取评论查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取评论列表失败")
+		return
 	}
 
 	render.Success(w, "查询成功", newPageResponse(comments, offset, pageSize, total))

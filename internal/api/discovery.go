@@ -128,13 +128,10 @@ func (h *DiscoveryHandler) searchPosts(
 	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
 		item := toSearchPostResponse(&rows[i])
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
-		)
-		if err != nil {
-			return nil, 0, err
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), items); err != nil {
+		return nil, 0, err
 	}
 	return items, total, nil
 }
@@ -164,15 +161,10 @@ func (h *DiscoveryHandler) searchUsers(
 			rows[i].AvatarURL,
 			rows[i].Bio,
 		)
-		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
-			item.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
-				FollowerID: viewerID, FollowingID: item.ID,
-			})
-			if err != nil {
-				return nil, 0, err
-			}
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerFollowingStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), items); err != nil {
+		return nil, 0, err
 	}
 	return items, total, nil
 }
@@ -571,15 +563,12 @@ func (h *DiscoveryHandler) ListTopicPosts(w http.ResponseWriter, r *http.Request
 			Height:       rows[i].Height,
 			CreatedAt:    rows[i].CreatedAt,
 		}
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取专题帖子查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取专题帖子失败")
-			return
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), items); err != nil {
+		log.Error().Err(err).Msg("获取专题帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取专题帖子失败")
+		return
 	}
 	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
@@ -706,15 +695,12 @@ func (h *DiscoveryHandler) ListTagPosts(w http.ResponseWriter, r *http.Request) 
 	items := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
 		item := toSearchPostFromTag(&rows[i])
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取标签帖子查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取标签帖子失败")
-			return
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), items); err != nil {
+		log.Error().Err(err).Msg("获取标签帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取标签帖子失败")
+		return
 	}
 	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }
@@ -761,15 +747,12 @@ func (h *DiscoveryHandler) Recommended(w http.ResponseWriter, r *http.Request) {
 			Height:       rows[i].Height,
 			CreatedAt:    rows[i].CreatedAt,
 		}
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), item.ID, item.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取发现流查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取发现流失败")
-			return
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), items); err != nil {
+		log.Error().Err(err).Msg("获取发现流查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取发现流失败")
+		return
 	}
 	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }

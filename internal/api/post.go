@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -36,6 +38,58 @@ func Pagination(r *http.Request, defaultPage, defaultPageSize, maxPageSize int) 
 		pageSize = maxPageSize
 	}
 	return (page - 1) * pageSize, pageSize
+}
+
+type feedCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+}
+
+type cursorPageResponse[T any] struct {
+	Items      []T    `json:"items"       validate:"required"`
+	NextCursor string `json:"next_cursor,omitempty"`
+	HasMore    bool   `json:"has_more"    validate:"required"`
+}
+
+func parseFeedCursor(r *http.Request) (feedCursor, int, error) {
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit < 1 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	cursor := feedCursor{CreatedAt: time.Unix(0, 0).UTC(), ID: uuid.Nil}
+	rawCursor := r.URL.Query().Get("cursor")
+	if rawCursor == "" {
+		return cursor, limit, nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(rawCursor)
+	if err != nil {
+		return feedCursor{}, 0, errors.New("无效的游标")
+	}
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.ID == uuid.Nil || cursor.CreatedAt.IsZero() {
+		return feedCursor{}, 0, errors.New("无效的游标")
+	}
+	return cursor, limit, nil
+}
+
+func newCursorPageResponse[T any](
+	items []T,
+	limit int,
+	cursorFor func(T) feedCursor,
+) cursorPageResponse[T] {
+	response := cursorPageResponse[T]{Items: items}
+	if len(items) <= limit {
+		return response
+	}
+	response.HasMore = true
+	response.Items = items[:limit]
+	payload, err := json.Marshal(cursorFor(response.Items[len(response.Items)-1]))
+	if err == nil {
+		response.NextCursor = base64.RawURLEncoding.EncodeToString(payload)
+	}
+	return response
 }
 
 type PostHandler struct {
@@ -202,6 +256,39 @@ func viewerPostStates(
 		return false, false, false, err
 	}
 	return liked, collected, following, nil
+}
+
+func applyViewerPostStates(
+	ctx context.Context,
+	store *db.Store,
+	viewerID uuid.UUID,
+	posts []listPostsItemResponse,
+) error {
+	if viewerID == uuid.Nil || len(posts) == 0 {
+		return nil
+	}
+	postIDs := make([]uuid.UUID, 0, len(posts))
+	for i := range posts {
+		postIDs = append(postIDs, posts[i].ID)
+	}
+	rows, err := store.ListViewerPostStates(ctx, db.ListViewerPostStatesParams{
+		ViewerID: viewerID,
+		PostIds:  postIDs,
+	})
+	if err != nil {
+		return err
+	}
+	states := make(map[uuid.UUID]db.ListViewerPostStatesRow, len(rows))
+	for i := range rows {
+		states[rows[i].PostID] = rows[i]
+	}
+	for i := range posts {
+		state := states[posts[i].ID]
+		posts[i].ViewerLiked = state.ViewerLiked
+		posts[i].ViewerCollected = state.ViewerCollected
+		posts[i].Author.ViewerFollowing = state.ViewerFollowing
+	}
+	return nil
 }
 
 func toMediaResponse(m *db.PostMedium) mediaResponse {
@@ -373,28 +460,26 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 //
 //	@Summary	获取帖子列表
 //	@Tags		posts
-//	@Param		page		query		int	false	"页码"	default(1)
-//	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
-//	@Failure	500			{object}	render.errorResponse
+//	@Param		cursor	query		string	false	"下一页游标"
+//	@Param		limit	query		int		false	"每页数量"	default(20)
+//	@Success	200		{object}	render.Response[cursorPageResponse[listPostsItemResponse]]
+//	@Failure	500		{object}	render.errorResponse
 //	@Router		/posts [get]
 func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
-	offset, pageSize := Pagination(r, 1, 20, 50)
+	cursor, pageSize, err := parseFeedCursor(r)
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	rows, err := h.store.ListPostsFeed(r.Context(), db.ListPostsFeedParams{
-		OffsetCount: int32(offset),
-		LimitCount:  int32(pageSize),
+		CursorCreatedAt: cursor.CreatedAt,
+		CursorID:        cursor.ID,
+		LimitCount:      int32(pageSize + 1),
 	})
 	if err != nil {
 		render.Error(w, http.StatusInternalServerError, "获取信息流失败")
 		return
 	}
-	total, err := h.store.CountPostsFeed(r.Context())
-	if err != nil {
-		log.Error().Err(err).Msg("统计信息流失败")
-		render.Error(w, http.StatusInternalServerError, "获取信息流失败")
-		return
-	}
-
 	posts := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
 		post := listPostsItemResponse{
@@ -411,18 +496,17 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 			Height:       rows[i].Height,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
-		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), post.ID, post.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取帖子查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取信息流失败")
-			return
-		}
 		posts = append(posts, post)
 	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), posts); err != nil {
+		log.Error().Err(err).Msg("获取帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取信息流失败")
+		return
+	}
 
-	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
+	render.Success(w, "查询成功", newCursorPageResponse(posts, pageSize, func(post listPostsItemResponse) feedCursor {
+		return feedCursor{CreatedAt: post.CreatedAt, ID: post.ID}
+	}))
 }
 
 // 获取关注用户的帖子列表
@@ -430,29 +514,26 @@ func (h *PostHandler) ListFeed(w http.ResponseWriter, r *http.Request) {
 //	@Summary	获取关注用户的帖子列表
 //	@Tags		posts
 //	@Security	BearerAuth
-//	@Param		page		query		int	false	"页码"	default(1)
-//	@Param		page_size	query		int	false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
-//	@Failure	500			{object}	render.errorResponse
+//	@Param		cursor	query		string	false	"下一页游标"
+//	@Param		limit	query		int		false	"每页数量"	default(20)
+//	@Success	200		{object}	render.Response[cursorPageResponse[listPostsItemResponse]]
+//	@Failure	500		{object}	render.errorResponse
 //	@Router		/feed/following [get]
 func (h *PostHandler) ListFollowingFeed(w http.ResponseWriter, r *http.Request) {
 	userID := jwt.GetUserIDFromContext(r)
-	offset, pageSize := Pagination(r, 1, 20, 50)
+	cursor, pageSize, err := parseFeedCursor(r)
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	rows, err := h.store.ListFollowingPosts(r.Context(), db.ListFollowingPostsParams{
-		UserID: userID, OffsetCount: int32(offset), LimitCount: int32(pageSize),
+		UserID: userID, CursorCreatedAt: cursor.CreatedAt, CursorID: cursor.ID, LimitCount: int32(pageSize + 1),
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("获取关注流失败")
 		render.Error(w, http.StatusInternalServerError, "获取关注流失败")
 		return
 	}
-	total, err := h.store.CountFollowingPosts(r.Context(), userID)
-	if err != nil {
-		log.Error().Err(err).Msg("统计关注流失败")
-		render.Error(w, http.StatusInternalServerError, "获取关注流失败")
-		return
-	}
-
 	posts := make([]listPostsItemResponse, 0, len(rows))
 	for i := range rows {
 		item := listPostsItemResponse{
@@ -463,17 +544,16 @@ func (h *PostHandler) ListFollowingFeed(w http.ResponseWriter, r *http.Request) 
 			Height: rows[i].Height, CreatedAt: rows[i].CreatedAt,
 			Author: toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, userID, item.ID, item.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取关注流查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取关注流失败")
-			return
-		}
 		posts = append(posts, item)
 	}
-	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
+	if err := applyViewerPostStates(r.Context(), h.store, userID, posts); err != nil {
+		log.Error().Err(err).Msg("获取关注流查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取关注流失败")
+		return
+	}
+	render.Success(w, "查询成功", newCursorPageResponse(posts, pageSize, func(post listPostsItemResponse) feedCursor {
+		return feedCursor{CreatedAt: post.CreatedAt, ID: post.ID}
+	}))
 }
 
 // 获取帖子详情
@@ -559,12 +639,12 @@ func (h *PostHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //
 //	@Summary	获取指定用户的帖子列表
 //	@Tags		posts
-//	@Param		user_id		path		string	true	"用户 ID"
-//	@Param		page		query		int		false	"页码"	default(1)
-//	@Param		page_size	query		int		false	"每页数量"	default(20)
-//	@Success	200			{object}	render.Response[pageResponse[listPostsItemResponse]]
-//	@Failure	400			{object}	render.errorResponse
-//	@Failure	500			{object}	render.errorResponse
+//	@Param		user_id	path		string	true	"用户 ID"
+//	@Param		cursor	query		string	false	"下一页游标"
+//	@Param		limit	query		int		false	"每页数量"	default(20)
+//	@Success	200		{object}	render.Response[cursorPageResponse[listPostsItemResponse]]
+//	@Failure	400		{object}	render.errorResponse
+//	@Failure	500		{object}	render.errorResponse
 //	@Router		/users/{user_id}/posts [get]
 func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "user_id")
@@ -573,17 +653,13 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, "无效的用户 ID")
 		return
 	}
-	total, err := h.store.CountPostsByUserID(r.Context(), userID)
+	cursor, pageSize, err := parseFeedCursor(r)
 	if err != nil {
-		log.Error().Err(err).Msg("统计用户帖子失败")
-		render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
+		render.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	offset, pageSize := Pagination(r, 1, 20, 50)
 	rows, err := h.store.ListPostsByUser(r.Context(), db.ListPostsByUserParams{
-		UserID:      userID,
-		OffsetCount: int32(offset),
-		LimitCount:  int32(pageSize),
+		UserID: userID, CursorCreatedAt: cursor.CreatedAt, CursorID: cursor.ID, LimitCount: int32(pageSize + 1),
 	})
 	if err != nil {
 		render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
@@ -606,18 +682,17 @@ func (h *PostHandler) ListByUser(w http.ResponseWriter, r *http.Request) {
 			Height:       rows[i].Height,
 			Author:       toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
-		post.ViewerLiked, post.ViewerCollected, post.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, jwt.GetUserIDFromContext(r), post.ID, post.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取帖子查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
-			return
-		}
 		posts = append(posts, post)
 	}
+	if err := applyViewerPostStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), posts); err != nil {
+		log.Error().Err(err).Msg("获取帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取帖子列表失败")
+		return
+	}
 
-	render.Success(w, "查询成功", newPageResponse(posts, offset, pageSize, total))
+	render.Success(w, "查询成功", newCursorPageResponse(posts, pageSize, func(post listPostsItemResponse) feedCursor {
+		return feedCursor{CreatedAt: post.CreatedAt, ID: post.ID}
+	}))
 }
 
 // 删除帖子

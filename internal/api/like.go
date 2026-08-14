@@ -109,15 +109,12 @@ func (h *LikeHandler) ListLikedPosts(w http.ResponseWriter, r *http.Request) {
 			Height: rows[i].Height, CreatedAt: rows[i].CreatedAt,
 			Author: toAuthorFromFeed(rows[i].AuthorID, rows[i].AuthorUsername, rows[i].AuthorAvatar),
 		}
-		item.ViewerLiked, item.ViewerCollected, item.Author.ViewerFollowing, err = viewerPostStates(
-			r.Context(), h.store, userID, item.ID, item.Author.ID,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("获取点赞帖子查看者状态失败")
-			render.Error(w, http.StatusInternalServerError, "获取点赞列表失败")
-			return
-		}
 		items = append(items, item)
+	}
+	if err := applyViewerPostStates(r.Context(), h.store, userID, items); err != nil {
+		log.Error().Err(err).Msg("获取点赞帖子查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取点赞列表失败")
+		return
 	}
 	render.Success(w, "查询成功", newPageResponse(items, offset, pageSize, total))
 }

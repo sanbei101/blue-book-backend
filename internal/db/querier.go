@@ -103,6 +103,9 @@ type Querier interface {
 	ListTopicPosts(ctx context.Context, arg ListTopicPostsParams) ([]ListTopicPostsRow, error)
 	ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error)
 	ListTrendingSearches(ctx context.Context, arg ListTrendingSearchesParams) ([]ListTrendingSearchesRow, error)
+	ListViewerCommentLikedStates(ctx context.Context, arg ListViewerCommentLikedStatesParams) ([]ListViewerCommentLikedStatesRow, error)
+	ListViewerFollowingStates(ctx context.Context, arg ListViewerFollowingStatesParams) ([]ListViewerFollowingStatesRow, error)
+	ListViewerPostStates(ctx context.Context, arg ListViewerPostStatesParams) ([]ListViewerPostStatesRow, error)
 	MarkAllNotificationsRead(ctx context.Context, recipientID uuid.UUID) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	RecalculatePostCommentCount(ctx context.Context, postID uuid.UUID) error

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -187,6 +188,36 @@ func newFollowUserResponse(
 	return resp
 }
 
+func applyViewerFollowingStates(
+	ctx context.Context,
+	store *db.Store,
+	viewerID uuid.UUID,
+	users []followUserResponse,
+) error {
+	if viewerID == uuid.Nil || len(users) == 0 {
+		return nil
+	}
+	userIDs := make([]uuid.UUID, 0, len(users))
+	for i := range users {
+		userIDs = append(userIDs, users[i].ID)
+	}
+	rows, err := store.ListViewerFollowingStates(ctx, db.ListViewerFollowingStatesParams{
+		ViewerID: viewerID,
+		UserIds:  userIDs,
+	})
+	if err != nil {
+		return err
+	}
+	states := make(map[uuid.UUID]bool, len(rows))
+	for i := range rows {
+		states[rows[i].UserID] = rows[i].ViewerFollowing
+	}
+	for i := range users {
+		users[i].ViewerFollowing = states[users[i].ID]
+	}
+	return nil
+}
+
 // 获取粉丝列表
 //
 //	@Summary	获取粉丝列表
@@ -232,17 +263,12 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 			rows[i].AvatarURL,
 			rows[i].Bio,
 		)
-		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
-			user.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
-				FollowerID: viewerID, FollowingID: user.ID,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("获取粉丝查看者状态失败")
-				render.Error(w, http.StatusInternalServerError, "获取粉丝列表失败")
-				return
-			}
-		}
 		users = append(users, user)
+	}
+	if err := applyViewerFollowingStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), users); err != nil {
+		log.Error().Err(err).Msg("获取粉丝查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取粉丝列表失败")
+		return
 	}
 
 	render.Success(w, "查询成功", newPageResponse(users, offset, pageSize, total))
@@ -293,17 +319,12 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 			rows[i].AvatarURL,
 			rows[i].Bio,
 		)
-		if viewerID := jwt.GetUserIDFromContext(r); viewerID != uuid.Nil {
-			user.ViewerFollowing, err = h.store.IsFollowing(r.Context(), db.IsFollowingParams{
-				FollowerID: viewerID, FollowingID: user.ID,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("获取关注查看者状态失败")
-				render.Error(w, http.StatusInternalServerError, "获取关注列表失败")
-				return
-			}
-		}
 		users = append(users, user)
+	}
+	if err := applyViewerFollowingStates(r.Context(), h.store, jwt.GetUserIDFromContext(r), users); err != nil {
+		log.Error().Err(err).Msg("获取关注查看者状态失败")
+		render.Error(w, http.StatusInternalServerError, "获取关注列表失败")
+		return
 	}
 
 	render.Success(w, "查询成功", newPageResponse(users, offset, pageSize, total))

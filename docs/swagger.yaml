@@ -255,6 +255,21 @@ components:
       required:
       - name
       type: object
+    api.cursorPageResponse-api_listPostsItemResponse:
+      properties:
+        has_more:
+          type: boolean
+        items:
+          items:
+            $ref: '#/components/schemas/api.listPostsItemResponse'
+          type: array
+          uniqueItems: false
+        next_cursor:
+          type: string
+      required:
+      - has_more
+      - items
+      type: object
     api.deleteCommentResponse:
       properties:
         comment_count:
@@ -1037,6 +1052,15 @@ components:
         msg:
           type: string
       type: object
+    render.Response-api_cursorPageResponse-api_listPostsItemResponse:
+      properties:
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/api.cursorPageResponse-api_listPostsItemResponse'
+        msg:
+          type: string
+      type: object
     render.Response-api_deleteCommentResponse:
       properties:
         code:
@@ -1689,15 +1713,14 @@ paths:
   /feed/following:
     get:
       parameters:
-      - description: 页码
+      - description: 下一页游标
         in: query
-        name: page
+        name: cursor
         schema:
-          default: 1
-          type: integer
+          type: string
       - description: 每页数量
         in: query
-        name: page_size
+        name: limit
         schema:
           default: 20
           type: integer
@@ -1706,7 +1729,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_cursorPageResponse-api_listPostsItemResponse'
           description: OK
         "500":
           content:
@@ -2260,15 +2283,14 @@ paths:
   /posts:
     get:
       parameters:
-      - description: 页码
+      - description: 下一页游标
         in: query
-        name: page
+        name: cursor
         schema:
-          default: 1
-          type: integer
+          type: string
       - description: 每页数量
         in: query
-        name: page_size
+        name: limit
         schema:
           default: 20
           type: integer
@@ -2277,7 +2299,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_cursorPageResponse-api_listPostsItemResponse'
           description: OK
         "500":
           content:
@@ -3188,15 +3210,14 @@ paths:
         required: true
         schema:
           type: string
-      - description: 页码
+      - description: 下一页游标
         in: query
-        name: page
+        name: cursor
         schema:
-          default: 1
-          type: integer
+          type: string
       - description: 每页数量
         in: query
-        name: page_size
+        name: limit
         schema:
           default: 20
           type: integer
@@ -3205,7 +3226,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/render.Response-api_pageResponse-api_listPostsItemResponse'
+                $ref: '#/components/schemas/render.Response-api_cursorPageResponse-api_listPostsItemResponse'
           description: OK
         "400":
           content:

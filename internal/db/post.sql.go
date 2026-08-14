@@ -285,14 +285,19 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE f.follower_id = $1
+	AND (
+    $2::timestamptz = TIMESTAMPTZ 'epoch'
+    OR (p.created_at, p.id) < ($2::timestamptz, $3::uuid)
+	)
 ORDER BY p.created_at DESC, p.id DESC
-LIMIT $3 OFFSET $2
+LIMIT $4
 `
 
 type ListFollowingPostsParams struct {
-	UserID      uuid.UUID `json:"user_id"`
-	OffsetCount int32     `json:"offset_count"`
-	LimitCount  int32     `json:"limit_count"`
+	UserID          uuid.UUID `json:"user_id"`
+	CursorCreatedAt time.Time `json:"cursor_created_at"`
+	CursorID        uuid.UUID `json:"cursor_id"`
+	LimitCount      int32     `json:"limit_count"`
 }
 
 type ListFollowingPostsRow struct {
@@ -313,7 +318,12 @@ type ListFollowingPostsRow struct {
 }
 
 func (q *Queries) ListFollowingPosts(ctx context.Context, arg ListFollowingPostsParams) ([]ListFollowingPostsRow, error) {
-	rows, err := q.db.Query(ctx, listFollowingPosts, arg.UserID, arg.OffsetCount, arg.LimitCount)
+	rows, err := q.db.Query(ctx, listFollowingPosts,
+		arg.UserID,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -365,14 +375,19 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE p.user_id = $1
+	AND (
+    $2::timestamptz = TIMESTAMPTZ 'epoch'
+    OR (p.created_at, p.id) < ($2::timestamptz, $3::uuid)
+	)
 ORDER BY p.created_at DESC, p.id DESC
-LIMIT $3 OFFSET $2
+LIMIT $4
 `
 
 type ListPostsByUserParams struct {
-	UserID      uuid.UUID `json:"user_id"`
-	OffsetCount int32     `json:"offset_count"`
-	LimitCount  int32     `json:"limit_count"`
+	UserID          uuid.UUID `json:"user_id"`
+	CursorCreatedAt time.Time `json:"cursor_created_at"`
+	CursorID        uuid.UUID `json:"cursor_id"`
+	LimitCount      int32     `json:"limit_count"`
 }
 
 type ListPostsByUserRow struct {
@@ -393,7 +408,12 @@ type ListPostsByUserRow struct {
 }
 
 func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error) {
-	rows, err := q.db.Query(ctx, listPostsByUser, arg.UserID, arg.OffsetCount, arg.LimitCount)
+	rows, err := q.db.Query(ctx, listPostsByUser,
+		arg.UserID,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -438,9 +458,11 @@ SELECT
 FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
-    FROM posts
-    ORDER BY created_at DESC, id DESC
-    LIMIT $2 OFFSET $1
+    FROM posts p
+    WHERE $1::timestamptz = TIMESTAMPTZ 'epoch'
+       OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid)
+    ORDER BY p.created_at DESC, p.id DESC
+	LIMIT $3
 ) p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
@@ -454,8 +476,9 @@ ORDER BY p.created_at DESC, p.id DESC
 `
 
 type ListPostsFeedParams struct {
-	OffsetCount int32 `json:"offset_count"`
-	LimitCount  int32 `json:"limit_count"`
+	CursorCreatedAt time.Time `json:"cursor_created_at"`
+	CursorID        uuid.UUID `json:"cursor_id"`
+	LimitCount      int32     `json:"limit_count"`
 }
 
 type ListPostsFeedRow struct {
@@ -476,7 +499,7 @@ type ListPostsFeedRow struct {
 }
 
 func (q *Queries) ListPostsFeed(ctx context.Context, arg ListPostsFeedParams) ([]ListPostsFeedRow, error) {
-	rows, err := q.db.Query(ctx, listPostsFeed, arg.OffsetCount, arg.LimitCount)
+	rows, err := q.db.Query(ctx, listPostsFeed, arg.CursorCreatedAt, arg.CursorID, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}

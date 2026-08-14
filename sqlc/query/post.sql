@@ -23,9 +23,11 @@ SELECT
 FROM (
     SELECT id, user_id, title, content, view_count, like_count, collect_count,
            comment_count, created_at
-    FROM posts
-    ORDER BY created_at DESC, id DESC
-    LIMIT @limit_count OFFSET @offset_count
+    FROM posts p
+    WHERE @cursor_created_at::timestamptz = TIMESTAMPTZ 'epoch'
+       OR (p.created_at, p.id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
+    ORDER BY p.created_at DESC, p.id DESC
+	LIMIT @limit_count
 ) p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN LATERAL (
@@ -59,8 +61,12 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE f.follower_id = @user_id
+	AND (
+    @cursor_created_at::timestamptz = TIMESTAMPTZ 'epoch'
+    OR (p.created_at, p.id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
+	)
 ORDER BY p.created_at DESC, p.id DESC
-LIMIT @limit_count OFFSET @offset_count;
+LIMIT @limit_count;
 
 -- name: CountFollowingPosts :one
 SELECT COUNT(*)::bigint
@@ -95,8 +101,12 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) pm ON true
 WHERE p.user_id = @user_id
+	AND (
+    @cursor_created_at::timestamptz = TIMESTAMPTZ 'epoch'
+    OR (p.created_at, p.id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
+	)
 ORDER BY p.created_at DESC, p.id DESC
-LIMIT @limit_count OFFSET @offset_count;
+LIMIT @limit_count;
 
 -- name: CountPostsByUserID :one
 SELECT COUNT(*)::bigint FROM posts WHERE user_id = @user_id;
