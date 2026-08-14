@@ -46,9 +46,9 @@ type feedCursor struct {
 }
 
 type cursorPageResponse[T any] struct {
-	Items      []T    `json:"items"       validate:"required"`
+	Items      []T    `json:"items"                 validate:"required"`
 	NextCursor string `json:"next_cursor,omitempty"`
-	HasMore    bool   `json:"has_more"    validate:"required"`
+	HasMore    bool   `json:"has_more"              validate:"required"`
 }
 
 func parseFeedCursor(r *http.Request) (feedCursor, int, error) {
