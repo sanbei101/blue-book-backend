@@ -1,6 +1,6 @@
 module github.com/sanbei101/blue-book
 
-go 1.26
+go 1.27
 
 require (
 	github.com/cristalhq/jwt/v5 v5.4.0
