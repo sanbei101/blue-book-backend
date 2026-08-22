@@ -3,8 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 )
@@ -31,7 +30,7 @@ func (s *Seeder) seedLikes(
 			}
 			seen[key] = true
 
-			likeID := uuid.Must(uuid.NewV7())
+			likeID := uuid.NewV7()
 			_, err := s.store.AddPostLike(ctx, db.AddPostLikeParams{
 				ID:     likeID,
 				UserID: user.ID,
@@ -64,7 +63,7 @@ func (s *Seeder) seedLikes(
 			}
 			seen[key] = true
 
-			likeID := uuid.Must(uuid.NewV7())
+			likeID := uuid.NewV7()
 			_, err := s.store.AddCommentLike(ctx, db.AddCommentLikeParams{
 				ID:        likeID,
 				UserID:    user.ID,

@@ -5,17 +5,16 @@ import (
 	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/phuslu/log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/phuslu/log"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -59,7 +58,7 @@ func parseFeedCursor(r *http.Request) (feedCursor, int, error) {
 	if limit > 50 {
 		limit = 50
 	}
-	cursor := feedCursor{CreatedAt: time.Unix(0, 0).UTC(), ID: uuid.Nil}
+	cursor := feedCursor{CreatedAt: time.Unix(0, 0).UTC(), ID: uuid.Nil()}
 	rawCursor := r.URL.Query().Get("cursor")
 	if rawCursor == "" {
 		return cursor, limit, nil
@@ -68,7 +67,7 @@ func parseFeedCursor(r *http.Request) (feedCursor, int, error) {
 	if err != nil {
 		return feedCursor{}, 0, errors.New("无效的游标")
 	}
-	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.ID == uuid.Nil || cursor.CreatedAt.IsZero() {
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.ID == uuid.Nil() || cursor.CreatedAt.IsZero() {
 		return feedCursor{}, 0, errors.New("无效的游标")
 	}
 	return cursor, limit, nil
@@ -240,7 +239,7 @@ func viewerPostStates(
 	store *db.Store,
 	viewerID, postID, authorID uuid.UUID,
 ) (liked, collected, following bool, err error) {
-	if viewerID == uuid.Nil {
+	if viewerID == uuid.Nil() {
 		return false, false, false, nil
 	}
 	liked, err = store.IsPostLiked(ctx, db.IsPostLikedParams{UserID: viewerID, PostID: postID})
@@ -264,7 +263,7 @@ func applyViewerPostStates(
 	viewerID uuid.UUID,
 	posts []listPostsItemResponse,
 ) error {
-	if viewerID == uuid.Nil || len(posts) == 0 {
+	if viewerID == uuid.Nil() || len(posts) == 0 {
 		return nil
 	}
 	postIDs := make([]uuid.UUID, 0, len(posts))
@@ -334,7 +333,7 @@ func (h *PostHandler) toCreatePostMediaParams(
 		}
 
 		params[i] = db.CreatePostMediaParams{
-			ID:        uuid.Must(uuid.NewV7()),
+			ID:        uuid.NewV7(),
 			PostID:    postID,
 			MediaKey:  mediaKey,
 			MediaType: mediaType,
@@ -377,7 +376,7 @@ func replacePostTags(ctx context.Context, q *db.Queries, postID uuid.UUID, tags 
 	}
 	for _, name := range tags {
 		tag, err := q.CreateTag(ctx, db.CreateTagParams{
-			ID:          uuid.Must(uuid.NewV7()),
+			ID:          uuid.NewV7(),
 			Name:        name,
 			Description: "",
 		})
@@ -415,7 +414,7 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentUserID := jwt.GetUserIDFromContext(r)
-	postID := uuid.Must(uuid.NewV7())
+	postID := uuid.NewV7()
 	mediaParams, err := h.toCreatePostMediaParams(r.Context(), postID, body.Media)
 	if err != nil {
 		log.Error().Err(err).Msg("解析帖子媒体尺寸失败")

@@ -2,14 +2,13 @@ package api
 
 import (
 	"errors"
-	"net/http"
-	"strings"
-	"time"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/phuslu/log"
+	"net/http"
+	"strings"
+	"time"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -221,7 +220,7 @@ func (h *DiscoveryHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.RecordSearchTerm(r.Context(), keyword); err != nil {
 		log.Error().Err(err).Msg("记录热搜词失败")
 	}
-	if userID := jwt.GetUserIDFromContext(r); userID != uuid.Nil {
+	if userID := jwt.GetUserIDFromContext(r); userID != uuid.Nil() {
 		if err := h.store.AddSearchHistory(r.Context(), db.AddSearchHistoryParams{
 			UserID:  userID,
 			Keyword: keyword,
@@ -601,7 +600,7 @@ func (h *DiscoveryHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := h.store.CreateTag(r.Context(), db.CreateTagParams{
-		ID:          uuid.Must(uuid.NewV7()),
+		ID:          uuid.NewV7(),
 		Name:        name,
 		Description: strings.TrimSpace(body.Description),
 	})

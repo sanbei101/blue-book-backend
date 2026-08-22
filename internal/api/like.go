@@ -2,12 +2,11 @@ package api
 
 import (
 	"errors"
-	"net/http"
-
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/phuslu/log"
+	"net/http"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -33,14 +32,14 @@ type likeStatusResponse struct {
 func parseUUIDParam(r *http.Request, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, name))
 	if err != nil {
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	return id, true
 }
 
 func (h *LikeHandler) likePostTx(r *http.Request, q *db.Queries, userID, postID uuid.UUID) (likeStatusResponse, error) {
 	rows, err := q.AddPostLike(r.Context(), db.AddPostLikeParams{
-		ID:     uuid.Must(uuid.NewV7()),
+		ID:     uuid.NewV7(),
 		UserID: userID,
 		PostID: postID,
 	})
@@ -63,7 +62,7 @@ func (h *LikeHandler) likePostTx(r *http.Request, q *db.Queries, userID, postID 
 	if rows > 0 && post.UserID != userID {
 		postIDCopy := postID
 		if err := q.CreatePostNotification(r.Context(), db.CreatePostNotificationParams{
-			ID: uuid.Must(uuid.NewV7()), RecipientID: post.UserID, ActorID: userID,
+			ID: uuid.NewV7(), RecipientID: post.UserID, ActorID: userID,
 			NotificationType: "post_liked", PostID: &postIDCopy,
 		}); err != nil {
 			return likeStatusResponse{}, err
@@ -230,7 +229,7 @@ func (h *LikeHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
 	var resp likeStatusResponse
 	err := h.store.ExecTx(r.Context(), func(q *db.Queries) error {
 		rows, err := q.AddCommentLike(r.Context(), db.AddCommentLikeParams{
-			ID:        uuid.Must(uuid.NewV7()),
+			ID:        uuid.NewV7(),
 			UserID:    userID,
 			CommentID: commentID,
 		})
@@ -250,7 +249,7 @@ func (h *LikeHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
 			postIDCopy := comment.PostID
 			commentIDCopy := comment.ID
 			if err := q.CreateCommentNotification(r.Context(), db.CreateCommentNotificationParams{
-				ID: uuid.Must(uuid.NewV7()), RecipientID: comment.UserID, ActorID: userID,
+				ID: uuid.NewV7(), RecipientID: comment.UserID, ActorID: userID,
 				NotificationType: "comment_liked", PostID: &postIDCopy, CommentID: &commentIDCopy,
 			}); err != nil {
 				return err

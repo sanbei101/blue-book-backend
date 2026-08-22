@@ -3,12 +3,11 @@ package api
 import (
 	"context"
 	"errors"
-	"net/http"
-	"time"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/phuslu/log"
+	"net/http"
+	"time"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -72,7 +71,7 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 			notificationRecipientID = parent.UserID
 		}
 		comment, err = q.CreateComment(r.Context(), db.CreateCommentParams{
-			ID:       uuid.Must(uuid.NewV7()),
+			ID:       uuid.NewV7(),
 			PostID:   body.PostID,
 			UserID:   currentUserID,
 			ParentID: body.ParentID,
@@ -88,7 +87,7 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 			postIDCopy := body.PostID
 			commentIDCopy := comment.ID
 			return q.CreateCommentNotification(r.Context(), db.CreateCommentNotificationParams{
-				ID: uuid.Must(uuid.NewV7()), RecipientID: notificationRecipientID, ActorID: currentUserID,
+				ID: uuid.NewV7(), RecipientID: notificationRecipientID, ActorID: currentUserID,
 				NotificationType: "comment_created", PostID: &postIDCopy, CommentID: &commentIDCopy,
 			})
 		}
@@ -237,7 +236,7 @@ func applyViewerCommentLikedStates(
 	viewerID uuid.UUID,
 	comments []commentResponse,
 ) error {
-	if viewerID == uuid.Nil || len(comments) == 0 {
+	if viewerID == uuid.Nil() || len(comments) == 0 {
 		return nil
 	}
 	commentIDs := make([]uuid.UUID, 0, len(comments))

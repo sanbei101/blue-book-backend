@@ -1,11 +1,10 @@
 package api
 
 import (
+	"github.com/phuslu/log"
 	"net/http"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/phuslu/log"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"

@@ -3,16 +3,15 @@ package api
 import (
 	"context"
 	"errors"
-	"net/http"
-	"time"
-
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/phuslu/log"
 	"golang.org/x/crypto/bcrypt"
+	"net/http"
+	"time"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -114,7 +113,7 @@ func (h *UserHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := h.store.CreateAPIKey(r.Context(), db.CreateAPIKeyParams{
-		ID:        uuid.Must(uuid.NewV7()),
+		ID:        uuid.NewV7(),
 		UserID:    jwt.GetUserIDFromContext(r),
 		Name:      body.Name,
 		KeyPrefix: key[:12],
@@ -200,7 +199,7 @@ func (h *UserHandler) issueTokens(ctx context.Context, userID uuid.UUID) (authRe
 	}
 	err = h.store.ExecTx(ctx, func(q *db.Queries) error {
 		_, err := q.CreateSession(ctx, db.CreateSessionParams{
-			ID:               uuid.Must(uuid.NewV7()),
+			ID:               uuid.NewV7(),
 			UserID:           userID,
 			RefreshTokenHash: jwt.HashRefreshToken(refreshToken),
 			ExpiresAt:        time.Now().Add(jwt.RefreshTokenTTL),
@@ -292,7 +291,7 @@ func (h *UserHandler) profileResponse(
 	if user.Bio.Valid {
 		resp.Bio = user.Bio.String
 	}
-	if viewerID != uuid.Nil {
+	if viewerID != uuid.Nil() {
 		resp.ViewerFollowing, err = h.store.IsFollowing(ctx, db.IsFollowingParams{
 			FollowerID:  viewerID,
 			FollowingID: userID,
@@ -327,7 +326,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.store.CreateUser(r.Context(), db.CreateUserParams{
-		ID:           uuid.Must(uuid.NewV7()),
+		ID:           uuid.NewV7(),
 		Username:     body.Username,
 		PasswordHash: string(passwordHash),
 		AvatarURL:    pgtype.Text{},
@@ -445,7 +444,7 @@ func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		_, err = q.CreateSession(r.Context(), db.CreateSessionParams{
-			ID:               uuid.Must(uuid.NewV7()),
+			ID:               uuid.NewV7(),
 			UserID:           user.ID,
 			RefreshTokenHash: jwt.HashRefreshToken(refreshToken),
 			ExpiresAt:        time.Now().Add(jwt.RefreshTokenTTL),

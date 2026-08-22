@@ -3,9 +3,8 @@ package seed
 import (
 	"context"
 	"fmt"
-
-	"github.com/google/uuid"
 	"github.com/phuslu/log"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/media"
@@ -39,7 +38,7 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 		author := users[s.rng.IntN(len(users))]
 
 		post, err := s.store.CreatePost(ctx, db.CreatePostParams{
-			ID:      uuid.Must(uuid.NewV7()),
+			ID:      uuid.NewV7(),
 			UserID:  author.ID,
 			Title:   p.Title,
 			Content: p.Content,
@@ -56,7 +55,7 @@ func (s *Seeder) seedPosts(ctx context.Context, users []db.User) ([]db.Post, []d
 		for j := range mediaCount {
 			asset := assets[j]
 			mediaParams = append(mediaParams, db.CreatePostMediaParams{
-				ID:        uuid.Must(uuid.NewV7()),
+				ID:        uuid.NewV7(),
 				PostID:    post.ID,
 				MediaKey:  asset.ObjectKey,
 				MediaType: db.MediaTypeEnumImage,

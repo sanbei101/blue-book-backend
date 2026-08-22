@@ -2,12 +2,11 @@ package api
 
 import (
 	"errors"
-	"net/http"
-	"time"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/phuslu/log"
+	"net/http"
+	"time"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -372,7 +371,7 @@ func (h *CollectionHandler) CreateFolder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	folder, err := h.store.CreateCollectionFolder(r.Context(), db.CreateCollectionFolderParams{
-		ID:     uuid.Must(uuid.NewV7()),
+		ID:     uuid.NewV7(),
 		UserID: userID,
 		Name:   body.Name,
 	})

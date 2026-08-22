@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/purus-dev/aqua"
+	_ "golang.org/x/image/webp" // Register WebP image decoding.
 	"image"
 	_ "image/gif"  // Register GIF image decoding.
 	_ "image/jpeg" // Register JPEG image decoding.
@@ -13,10 +15,7 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/purus-dev/aqua"
-	_ "golang.org/x/image/webp" // Register WebP image decoding.
+	"uuid"
 )
 
 // ErrNotConfigured 表示对象存储未配置,无法生成预签名地址
@@ -63,7 +62,7 @@ func (p *Presigner) PresignPutObject(
 	contentType string,
 	ttl time.Duration,
 ) (uploadURL, key string, err error) {
-	key = uuid.Must(uuid.NewV7()).String()
+	key = uuid.NewV7().String()
 
 	uploadURL, err = p.client.PutObjectPresign(key, int64(ttl.Seconds()), contentType)
 	if err != nil {

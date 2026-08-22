@@ -3,10 +3,9 @@ package seed
 import (
 	"context"
 	"fmt"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 )
@@ -22,7 +21,7 @@ func (s *Seeder) seedUsers(ctx context.Context) ([]db.User, error) {
 
 	for _, u := range userSeeds {
 		user, err := s.store.CreateUser(ctx, db.CreateUserParams{
-			ID:           uuid.Must(uuid.NewV7()),
+			ID:           uuid.NewV7(),
 			Username:     u.Username,
 			PasswordHash: string(passwordHash),
 			AvatarURL:    pgtype.Text{String: avatarURL(u.Username), Valid: true},

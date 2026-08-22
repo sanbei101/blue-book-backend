@@ -7,13 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
+	"github.com/cristalhq/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/cristalhq/jwt/v5"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/render"
@@ -137,7 +136,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			render.Error(w, http.StatusUnauthorized, "凭证数据解析失败")
 			return
 		}
-		if c.UserID == uuid.Nil {
+		if c.UserID == uuid.Nil() {
 			render.Error(w, http.StatusUnauthorized, "无效的登录凭证")
 			return
 		}
@@ -156,17 +155,17 @@ func authenticateAPIKey(r *http.Request, store *db.Store) (uuid.UUID, bool, erro
 	auth := r.Header.Get("Authorization")
 	parts := strings.SplitN(auth, " ", 2)
 	if len(parts) != 2 || parts[0] != "Bearer" || !IsAPIKey(parts[1]) {
-		return uuid.Nil, false, nil
+		return uuid.Nil(), false, nil
 	}
 	key, err := store.GetActiveAPIKeyByHash(r.Context(), HashAPIKey(parts[1]))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, false, nil
+			return uuid.Nil(), false, nil
 		}
-		return uuid.Nil, false, err
+		return uuid.Nil(), false, err
 	}
 	if err := store.TouchAPIKey(r.Context(), key.ID); err != nil {
-		return uuid.Nil, false, err
+		return uuid.Nil(), false, err
 	}
 	return key.UserID, true, nil
 }
@@ -221,7 +220,7 @@ func OptionalAuthMiddleware(store *db.Store) func(http.Handler) http.Handler {
 			}
 			var claims userClaims
 			if err := json.Unmarshal(token.Claims(), &claims); err != nil ||
-				claims.UserID == uuid.Nil || !claims.IsValidAt(time.Now()) {
+				claims.UserID == uuid.Nil() || !claims.IsValidAt(time.Now()) {
 				next.ServeHTTP(w, r)
 				return
 			}

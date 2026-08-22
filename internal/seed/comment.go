@@ -3,8 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 )
@@ -21,7 +20,7 @@ func (s *Seeder) seedComments(ctx context.Context, users []db.User, posts []db.P
 			commenter := users[s.rng.IntN(len(users))]
 
 			comment, err := s.store.CreateComment(ctx, db.CreateCommentParams{
-				ID:      uuid.Must(uuid.NewV7()),
+				ID:      uuid.NewV7(),
 				PostID:  post.ID,
 				UserID:  commenter.ID,
 				Content: commentSeeds[s.rng.IntN(len(commentSeeds))],
@@ -39,7 +38,7 @@ func (s *Seeder) seedComments(ctx context.Context, users []db.User, posts []db.P
 					replier := users[s.rng.IntN(len(users))]
 
 					reply, err := s.store.CreateComment(ctx, db.CreateCommentParams{
-						ID:       uuid.Must(uuid.NewV7()),
+						ID:       uuid.NewV7(),
 						PostID:   post.ID,
 						UserID:   replier.ID,
 						ParentID: &comment.ID,

@@ -3,12 +3,11 @@ package api
 import (
 	"context"
 	"errors"
-	"net/http"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/phuslu/log"
+	"net/http"
+	"uuid"
 
 	"github.com/sanbei101/blue-book/internal/db"
 	"github.com/sanbei101/blue-book/internal/pkg/jwt"
@@ -68,7 +67,7 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		}
 		if rows > 0 {
 			if err := q.CreateFollowNotification(r.Context(), db.CreateFollowNotificationParams{
-				ID: uuid.Must(uuid.NewV7()), RecipientID: targetID, ActorID: currentUserID,
+				ID: uuid.NewV7(), RecipientID: targetID, ActorID: currentUserID,
 			}); err != nil {
 				return err
 			}
@@ -194,7 +193,7 @@ func applyViewerFollowingStates(
 	viewerID uuid.UUID,
 	users []followUserResponse,
 ) error {
-	if viewerID == uuid.Nil || len(users) == 0 {
+	if viewerID == uuid.Nil() || len(users) == 0 {
 		return nil
 	}
 	userIDs := make([]uuid.UUID, 0, len(users))
